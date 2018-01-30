@@ -101,3 +101,7 @@ speed:
   fast: 30
   slow: 20
   stow: 20
+
+gripper:
+  finger_width_delta: 0.01 # how much the foam protrudes inside the fingers
+  closing_force: 50

@@ -283,12 +283,27 @@ class GraspSupervisor(object):
 
         return poseStamped
 
+    """
+    Returns gripper width in millimeters gotten from the grasp msg
+    """
+    def getGripperWidthFromGraspMsg(self, graspMsg):
+        gripperWidth = graspMsg.params.hand_inner_diameter
+        gripperWidth += 2 * self.graspingParams['gripper']['finger_width_delta']
+        return gripperWidth * 1000
+
+    def openGripperForGrasp(self, graspMsg):
+        gripperWidth_mm = self.getGripperWidthFromGraspMsg(graspMsg)
+        print "setting gripper width = ", gripperWidth_mm
+        self.gripperDriver.sendGripperCommand(gripperWidth_mm, 40)
 
     """
     Attempt a grasp
     return: boolean if it was successful or not
     """
-    def attemptGrasp(self, graspFrame):
+    def attemptGrasp(self, graspFrame, graspMsg=None):
+
+        if graspMsg is None:
+            graspMsg = self.topGrasp
 
     	preGraspFrame = transformUtils.concatenateTransforms([self.preGraspToGraspTransform, self.graspFrame])
 
@@ -315,8 +330,11 @@ class GraspSupervisor(object):
         # store for future use
         self.preGraspFrame = preGraspFrame
         self.graspFrame = graspFrame
-        self.gripperDriver.sendOpenGripperCommand()
+
+        # set the gripper
+        self.openGripperForGrasp(graspMsg)
         rospy.sleep(0.5) # wait for the gripper to open
+
         self.robotService.moveToJointPosition(preGraspPose, maxJointDegreesPerSecond=self.graspingParams['speed']['pre_grasp'])
         self.robotService.moveToJointPosition(graspPose, maxJointDegreesPerSecond=self.graspingParams['speed']['grasp'])
     	
