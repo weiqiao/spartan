@@ -150,7 +150,7 @@ def make_force_guard_msg(scale):
 def pregrasp():
     pos = [0.63, 0.0, 0.16]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
-    # rotate pi/4 degrees
+    # rotate -pi/4 degrees
     mat = transformations.quaternion_matrix(quat)
     mat = mat[:3,:3]
     rot_axis = np.array([0,1,0])
@@ -168,6 +168,59 @@ def pregrasp():
     goal.force_guard.append(make_force_guard_msg(15.))
     return goal
 
+def postgrasp1():
+    pos = [0.63, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(0., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp2():
+    pos = [0.63, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/4
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp3():
+    pos = [0.63, 0.0, 0.16]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/4
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
 
 if __name__ == "__main__":
     rospy.init_node('sandboxx')
@@ -193,25 +246,30 @@ if __name__ == "__main__":
     client.wait_for_server()
     print "connected to EE action server"
 
-    print "i'm here"
     handDriver = SchunkDriver()
     handDriver.reset_and_home()
-    handDriver.reset_and_home()
+    rospy.sleep(3)
     handDriver.sendOpenGripperCommand()
-    #handDriver.sendCloseGripperCommand()
-    #handDriver.sendGripperCommand(0.5, force=80, speed=0.05)
-    print "nothing happened"
-    # gripper_goal_pos = 0.1
-    # handDriver.reset_and_home()
-    # handDriver.reset_and_home()
-    # gripper_goal_pos -= 0.5
-    # #gripper_goal_pos = max(min(gripper_goal_pos, 0.1), 0.0)
-    # handDriver.sendGripperCommand(gripper_goal_pos, speed=0.1)
-    # print "Gripper goal pos: ", gripper_goal_pos
-
-    for goal in [pregrasp()]:
+    rospy.sleep(3)
+    i = 0
+    for goal in [pregrasp(),
+                 postgrasp1(),
+                 postgrasp2(),
+                 postgrasp3()]:
         print "sending goal"
         client.send_goal(goal)
         rospy.loginfo("waiting for CartesianTrajectory action result")
         client.wait_for_result()
         result = client.get_result()
+        if i==0:
+            handDriver.sendCloseGripperCommand()
+            rospy.sleep(3)
+        elif i==3:
+            handDriver.sendOpenGripperCommand()
+            rospy.sleep(3)
+
+        i+=1
+
+
+
+
