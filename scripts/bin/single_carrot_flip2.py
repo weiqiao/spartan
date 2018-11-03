@@ -148,7 +148,7 @@ def make_force_guard_msg(scale):
 
     
 def pregrasp():
-    pos = [0.63, 0.0, 0.16]
+    pos = [0.63, 0.0, 0.15]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     # rotate -pi/4 degrees
     mat = transformations.quaternion_matrix(quat)
@@ -169,7 +169,7 @@ def pregrasp():
     return goal
 
 def postgrasp1():
-    pos = [0.63, 0.0, 0.36]
+    pos = [0.53, 0.0, 0.36]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     # make goal
     goal = make_cartesian_trajectory_goal_world_frame(
@@ -181,13 +181,13 @@ def postgrasp1():
     return goal
 
 def postgrasp2():
-    pos = [0.63, 0.0, 0.36]
+    pos = [0.53, 0.0, 0.36]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     # rotate pi/4 degrees
     mat = transformations.quaternion_matrix(quat)
     mat = mat[:3,:3]
     rot_axis = np.array([0,1,0])
-    rot_theta = np.pi/4
+    rot_theta = np.pi/3
     rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
     mat = rot_mat.dot(mat)
     quat = transformations.quaternion_from_matrix(mat)
@@ -202,13 +202,13 @@ def postgrasp2():
     return goal
 
 def postgrasp3():
-    pos = [0.63, 0.0, 0.16]
+    pos = [0.63, 0.0, 0.17]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     # rotate pi/4 degrees
     mat = transformations.quaternion_matrix(quat)
     mat = mat[:3,:3]
     rot_axis = np.array([0,1,0])
-    rot_theta = np.pi/4
+    rot_theta = np.pi/3
     rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
     mat = rot_mat.dot(mat)
     quat = transformations.quaternion_from_matrix(mat)
@@ -219,6 +219,27 @@ def postgrasp3():
         quat,
         duration = 5.)
     goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp4():
+    pos = [0.63, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/3
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(0., 10.))
     goal.force_guard.append(make_force_guard_msg(15.))
     return goal
 
@@ -255,7 +276,8 @@ if __name__ == "__main__":
     for goal in [pregrasp(),
                  postgrasp1(),
                  postgrasp2(),
-                 postgrasp3()]:
+                 postgrasp3(),
+                 postgrasp4()]:
         print "sending goal"
         client.send_goal(goal)
         rospy.loginfo("waiting for CartesianTrajectory action result")
