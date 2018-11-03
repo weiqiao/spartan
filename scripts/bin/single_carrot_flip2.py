@@ -23,6 +23,9 @@ from spartan.utils.ros_utils import RobotService
 import spartan.utils.ros_utils as rosUtils
 import spartan.utils.utils as spartan_utils
 import robot_control.control_utils as control_utils
+import spartan.utils.transformations as transformations
+import transform_util as tf_util
+from spartan.manipulation.schunk_driver import SchunkDriver
 # spartan ROS
 import robot_msgs.msg
 
@@ -144,32 +147,27 @@ def make_force_guard_msg(scale):
     return msg
 
     
-def make_move_down_goal():
+def pregrasp():
+    pos = [0.63, 0.0, 0.16]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = -np.pi/4
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
     goal = make_cartesian_trajectory_goal_world_frame(
-        pos = [0.63, 0.0, 0.16],
-        quat = [ 0.70852019, -0.15500524,  0.67372875,  0.1416407 ],
+        pos,
+        quat,
         duration = 5.)
-    goal.gains.append(make_cartesian_gains_msg(0., 20.))
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
     goal.force_guard.append(make_force_guard_msg(15.))
     return goal
 
-def make_move_over_goal():
-    goal = make_cartesian_trajectory_goal_world_frame(
-        pos = [0.63, 0.05, 0.16],
-        quat = [ 0.70852019, -0.15500524,  0.67372875,  0.1416407 ],
-        duration = 1.)
-    goal.gains.append(make_cartesian_gains_msg(0., 20.))
-    goal.force_guard.append(make_force_guard_msg(30.)) 
-    return goal
-
-def make_flip_over_goal():
-    goal = make_cartesian_trajectory_goal_world_frame(
-        pos = [0.63, 0.2, 0.3],
-        quat = [ 0.70852019, -0.15500524,  0.67372875,  0.1416407 ],
-        duration = 0.5)
-    goal.gains.append(make_cartesian_gains_msg(0., 20.))
-    goal.force_guard.append(make_force_guard_msg(30.))    
-    return goal
 
 if __name__ == "__main__":
     rospy.init_node('sandboxx')
@@ -195,9 +193,23 @@ if __name__ == "__main__":
     client.wait_for_server()
     print "connected to EE action server"
 
-    for goal in [make_move_down_goal(),
-                 make_move_over_goal(),
-                 make_flip_over_goal()]:
+    print "i'm here"
+    handDriver = SchunkDriver()
+    handDriver.reset_and_home()
+    handDriver.reset_and_home()
+    handDriver.sendOpenGripperCommand()
+    #handDriver.sendCloseGripperCommand()
+    #handDriver.sendGripperCommand(0.5, force=80, speed=0.05)
+    print "nothing happened"
+    # gripper_goal_pos = 0.1
+    # handDriver.reset_and_home()
+    # handDriver.reset_and_home()
+    # gripper_goal_pos -= 0.5
+    # #gripper_goal_pos = max(min(gripper_goal_pos, 0.1), 0.0)
+    # handDriver.sendGripperCommand(gripper_goal_pos, speed=0.1)
+    # print "Gripper goal pos: ", gripper_goal_pos
+
+    for goal in [pregrasp()]:
         print "sending goal"
         client.send_goal(goal)
         rospy.loginfo("waiting for CartesianTrajectory action result")
