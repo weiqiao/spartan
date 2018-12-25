@@ -1,0 +1,2 @@
+
+-DCATKIN_DEVEL_PREFIX=/home/weiqiao/spartan/workspace/ros_home/devel -DCMAKE_INSTALL_PREFIX=/home/weiqiao/spartan/workspace/ros_home/install -G Unix Makefiles
