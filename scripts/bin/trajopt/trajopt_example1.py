@@ -5,6 +5,7 @@ import time
 import numpy as np
 import pydrake.solvers.mathematicalprogram as mp
 from pydrake.solvers.ipopt import IpoptSolver
+import matplotlib.pyplot as plt
 
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, mass, T, x_init, x_final, dt):
@@ -53,4 +54,9 @@ if __name__=="__main__":
 	solve_time = time.time() - start_time
 	assert result == mp.SolutionResult.kSolutionFound
 	print(solve_time)
-	print(prog.get_solution(x_over_time))
+	x_over_time_sol = prog.get_solution(x_over_time)
+	plt.figure()
+	plt.plot(x_over_time_sol[:,0],x_over_time_sol[:,1])
+	plt.xlabel('x')
+	plt.ylabel('v')
+	plt.show()
