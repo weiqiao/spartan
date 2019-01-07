@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
 
+# use a single finger to rotate carrot 30 degrees without considering friction between finger and carrot
+
 DynamicsConstraintEps = 0.0001
 mu_ground = 0.2
 g = 9.8
@@ -118,7 +120,7 @@ def visualize(X,F):
     draw_force(ax1,X,F) # draw forces
     global t
     t=t+1
-    fig.savefig('carrot_fig/carrot_%d.png'%t, dpi=100)
+    fig.savefig('trajopt_example2_fig/carrot_%d.png'%t, dpi=100)
     plt.close()
     return fig
 
@@ -132,7 +134,6 @@ def vertices(X,N=50):
         v[k,0]=x_centroid+r*np.sin(phi+theta)
         v[k,1]=y_centroid-r*np.cos(phi+theta)
     return v
-
 
 def draw_force(ax,X,F):
 	d = 0.5 # TODO
@@ -181,8 +182,6 @@ if __name__=="__main__":
 	pos_over_time_var, F_over_time_var = prog.add_dynamics_constraints(params, pos_init, pos_final)
 
 	solver = IpoptSolver()
-	prog.SetSolverOption(mp.SolverType.kGurobi, "LogToConsole", 1)
-	prog.SetSolverOption(mp.SolverType.kGurobi, "OutputFlag", 1)
 	start_time = time.time()
 	result = solver.Solve(prog)
 	solve_time = time.time() - start_time
