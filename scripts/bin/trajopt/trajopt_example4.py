@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
 
-# use a single finger to rotate carrot 30 degrees without considering friction between finger and carrot
+# use two fingers to rotate carrot 30 degrees without considering friction between finger and carrot
+# assume that the two contact points are both fixed
 
 DynamicsConstraintEps = 0.0001
 mu_ground = 0.2
