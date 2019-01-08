@@ -14,19 +14,21 @@ USE_GOOD_INITIAL_GUESS = 0
 # use a single finger to rotate carrot 30 degrees while considering friction between finger and carrot
 DynamicsConstraintEps = 0.0001
 PositionConstraintEps = 0.1
-mu_ground = 0.2 # frictional coefficient between ground and carrot
-mu_finger = 0.5 # frictional coefficient between finger and carrot
+mu_ground = 0.5 # frictional coefficient between ground and carrot
+mu_finger = 0.2 # frictional coefficient between finger and carrot
 g = 9.8
 r = 1
+mass = 1
+inertia = (np.pi/4-8/(9*np.pi))*(2*mass*r**2/np.pi)
 DistanceCentroidToCoM = 4*r/(3*np.pi)
 MaxInputForce = 100
 MaxRelVel = 0.2
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
-OptimizationSlackEps = 0.0001
-
+OptimizationSlackEps = 0.001
+VISUALIZE = 1
 class TrajectoryOptimization0(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
-		T,dt,d,mass,inertia = params
+		T,dt,d = params
 		T = int(T)
 		
 		n = len(pos_init)
@@ -74,8 +76,8 @@ class TrajectoryOptimization0(mp.MathematicalProgram):
 			self.AddConstraint(y + DistanceCentroidToCoM*sym.cos(theta) - r >= -DynamicsConstraintEps)
 
 			# carrot-ground rolling only constraints
-			self.AddConstraint(x + r*theta <= DynamicsConstraintEps)
-			self.AddConstraint(x + r*theta >= -DynamicsConstraintEps)
+			self.AddConstraint(x - DistanceCentroidToCoM*sym.sin(theta) + r*theta <= DynamicsConstraintEps)
+			self.AddConstraint(x - DistanceCentroidToCoM*sym.sin(theta) + r*theta >= -DynamicsConstraintEps)
 
 			# ground friction cone constraints 
 			self.AddLinearConstraint(Ft <= mu_ground*Fn)
@@ -109,7 +111,7 @@ class TrajectoryOptimization0(mp.MathematicalProgram):
 
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final, initial_guess):
-		T,dt,mass,inertia = params
+		T,dt = params
 		T = int(T)
 		n = len(pos_init)
 		# F = [F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft]
@@ -166,8 +168,8 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddConstraint(y + DistanceCentroidToCoM*sym.cos(theta) - r >= -DynamicsConstraintEps)
 
 			# carrot-ground rolling only constraints
-			self.AddConstraint(x + r*theta <= DynamicsConstraintEps)
-			self.AddConstraint(x + r*theta >= -DynamicsConstraintEps)
+			self.AddConstraint(x - DistanceCentroidToCoM*sym.sin(theta) + r*theta <= DynamicsConstraintEps)
+			self.AddConstraint(x - DistanceCentroidToCoM*sym.sin(theta) + r*theta >= -DynamicsConstraintEps)
 
 			# ground friction cone constraints 
 			self.AddLinearConstraint(Ft <= mu_ground*Fn)
@@ -201,15 +203,6 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(gamma1 >= 0)
 			self.AddLinearConstraint(F1_tp >= 0)
 			self.AddLinearConstraint(F1_tm >= 0)
-			# self.AddConstraint((mu_finger*F1 - F1_tp - F1_tm)*gamma1 <= 0)
-			# self.AddConstraint((gamma1+v1)*F1_tp <= 0)
-			# self.AddConstraint((gamma1-v1)*F1_tm <= 0)
-			# self.AddLinearConstraint(mu_finger*F1 - F1_tp - F1_tm >= 0)
-			# self.AddLinearConstraint(gamma1 >= 0)
-			# self.AddLinearConstraint(gamma1+v1 >= 0)
-			# self.AddLinearConstraint(F1_tp >= 0)
-			# self.AddLinearConstraint(gamma1-v1 >= 0)
-			# self.AddLinearConstraint(F1_tm >= 0)
 
 			# state bounds
 			for i in range(6):
@@ -273,7 +266,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 """
 Visualization Tools
 """    
-def visualize(X,F):
+def visualize(X,F,t):
     fig,ax1 = plt.subplots()
     ax1.set_xlabel("x",fontsize=20)
     ax1.set_ylabel("y",fontsize=20)
@@ -290,9 +283,8 @@ def visualize(X,F):
     ax1.plot([-12,12],[0,0],'black')
     ax1.plot(X[0],X[1],'+',color=(1,0,0))# draw CoM
     draw_force(ax1,X,F) # draw forces
-    global t
-    t=t+1
-    fig.savefig('trajopt_example2_fig/carrot_%d.png'%t, dpi=100)
+    t += 1
+    fig.savefig('trajopt_example3_fig/carrot_%d.png'%t, dpi=100)
     plt.close()
     return fig
 
@@ -308,10 +300,10 @@ def vertices(X,N=50):
     return v
 
 def draw_force(ax,X,F):
-	d = 0.5 # TODO
 	force_scaling_factor = 0.01 # TODO
 	x,y,theta=X[:3]
-	F1,Fn,Ft = F
+	d = X[-1]
+	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft = F
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)
 
@@ -319,6 +311,16 @@ def draw_force(ax,X,F):
 	y_F1 = y_centroid-d*np.sin(theta)
 	dx_F1 = np.sin(theta)*F1*force_scaling_factor
 	dy_F1 = -np.cos(theta)*F1*force_scaling_factor
+
+	x_F1_tp = x_F1
+	y_F1_tp = y_F1
+	dx_F1_tp = np.cos(theta)*F1_tp*force_scaling_factor
+	dy_F1_tp = np.sin(theta)*F1_tp*force_scaling_factor
+
+	x_F1_tm = x_F1
+	y_F1_tm = y_F1
+	dx_F1_tm = -np.cos(theta)*F1_tm*force_scaling_factor
+	dy_F1_tm = -np.sin(theta)*F1_tm*force_scaling_factor
 
 	x_Fn = x_centroid
 	y_Fn = 0
@@ -330,9 +332,17 @@ def draw_force(ax,X,F):
 	dx_Ft = Ft*force_scaling_factor
 	dy_Ft = 0
 
+	x_G = x 
+	y_G = y
+	dx_G = 0
+	dy_G = -1*mass*g*force_scaling_factor
+
 	ax.arrow(x_F1,y_F1,dx_F1,dy_F1,color=(1,0,1),head_width=0.05, head_length=0.1)
+	ax.arrow(x_F1_tp,y_F1_tp,dx_F1_tp,dy_F1_tp,color=(1,0,1),head_width=0.05, head_length=0.1)
+	ax.arrow(x_F1_tm,y_F1_tm,dx_F1_tm,dy_F1_tm,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_Fn,y_Fn,dx_Fn,dy_Fn,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_Ft,y_Ft,dx_Ft,dy_Ft,color=(1,0,1),head_width=0.05, head_length=0.1)
+	ax.arrow(x_G,y_G,dx_G,dy_G,color=(1,0,1),head_width=0.05, head_length=0.1)
 
 def center_mass(ax,X):
     x,y,theta,x_dot,y_dot,theta_dot=X
@@ -343,26 +353,26 @@ if __name__=="__main__":
 	T = 50
 	dt = 0.01
 	d = 0.5
-	mass = 1
-	inertia = (np.pi/4-8/(9*np.pi))*(2*mass*r**2/np.pi)
-	params = np.array([T,dt,d,mass,inertia])
+	params = np.array([T,dt,d])
 	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0])
-	pos_final = np.array([-r*np.pi/6,r-DistanceCentroidToCoM*np.cos(np.pi/6),np.pi/6,0,0,0])
-	pos_over_time_var, F_over_time_var = prog0.add_dynamics_constraints(params, pos_init, pos_final)
-	solver = IpoptSolver()
-	start_time = time.time()
-	result = solver.Solve(prog0)
-	solve_time = time.time() - start_time
-	assert result == mp.SolutionResult.kSolutionFound
-	print(solve_time)	
-	pos_over_time = prog0.get_solution(pos_over_time_var)
-	F_over_time = prog0.get_solution(F_over_time_var)
+	theta_final = np.pi/6
+	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0])
+	#pos_over_time_var, F_over_time_var = prog0.add_dynamics_constraints(params, pos_init, pos_final)
+	#solver = IpoptSolver()
+	#start_time = time.time()
+	#result = solver.Solve(prog0)
+	#solve_time = time.time() - start_time
+	#assert result == mp.SolutionResult.kSolutionFound
+	#print(solve_time)	
+	#pos_over_time = prog0.get_solution(pos_over_time_var)
+	#F_over_time = prog0.get_solution(F_over_time_var)
 
 	prog1 = TrajectoryOptimization()
-	params = np.array([T,dt,mass,inertia])
+	params = np.array([T,dt])
 	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0,d])
-	pos_final = np.array([-r*np.pi/6,r-DistanceCentroidToCoM*np.cos(np.pi/6),np.pi/6,0,0,0,d])
-	initial_guess = {'pos_over_time': pos_over_time, 'F_over_time': F_over_time}
+	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0,d])
+	#initial_guess = {'pos_over_time': pos_over_time, 'F_over_time': F_over_time}
+	initial_guess = {}
 	pos_over_time_var, F_over_time_var = prog1.add_dynamics_constraints(params, pos_init, pos_final,initial_guess)
 	solver = IpoptSolver()
 	start_time = time.time()
@@ -370,11 +380,8 @@ if __name__=="__main__":
 	solve_time = time.time() - start_time
 	assert result == mp.SolutionResult.kSolutionFound
 	print(solve_time)
-	# for t in range(T):
-	# 	visualize(pos_over_time[t,:],F_over_time[t,:])
-	# plot trajectory
-	plt.figure()
-	plt.plot(pos_over_time[:,0],pos_over_time[:,1])
-	plt.xlabel('x')
-	plt.ylabel('y')
-	plt.show()
+	pos_over_time = prog1.get_solution(pos_over_time_var)
+	F_over_time = prog1.get_solution(F_over_time_var)
+	if VISUALIZE:
+		for t in range(T):
+			visualize(pos_over_time[t,:],F_over_time[t,:],t)
