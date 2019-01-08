@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
 
-USE_GOOD_INITIAL_GUESS = 0 
-# use a single finger to rotate carrot 30 degrees while considering friction between finger and carrot
+# use two fingers to rotate carrot while considering friction between finger 1 and carrot
+# two contact points can move
+# finger 1 initial and final contact points are different 
+
 DynamicsConstraintEps = 0.00001
 PositionConstraintEps = 0.1
 mu_ground = 0.5 # frictional coefficient between ground and carrot
@@ -26,6 +28,7 @@ MaxRelVel = 0.2
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 OptimizationSlackEps = 0.001
 VISUALIZE = 1
+USE_GOOD_INITIAL_GUESS = 0 
 
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
@@ -150,7 +153,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(phi >= theta)
 			self.AddLinearConstraint(phi - theta <= np.pi/2)
 			self.AddLinearConstraint(phi >= np.pi/3)
-			self.AddLinearConstraint(phi <= np.pi*2/3)
+			self.AddLinearConstraint(phi <= np.pi*5/6)
 
 		# initial state constraint
 		for i in range(n):
