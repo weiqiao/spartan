@@ -12,7 +12,7 @@ from matplotlib.collections import PatchCollection
 
 USE_GOOD_INITIAL_GUESS = 0 
 # use a single finger to rotate carrot 30 degrees while considering friction between finger and carrot
-DynamicsConstraintEps = 0.0001
+DynamicsConstraintEps = 0.00001
 PositionConstraintEps = 0.1
 mu_ground = 0.5 # frictional coefficient between ground and carrot
 mu_finger = 0.2 # frictional coefficient between finger and carrot
@@ -66,12 +66,14 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			# force constraints
 			x_ddot = (F1*sym.sin(theta) + Ft) / mass
 			x_ddot += (F1_tp*sym.cos(theta) - F1_tm*sym.cos(theta)) / mass # friction on finger 1
-			x_ddot += - F2*sym.sin(phi) # F2, angle = pi/2 - phi
+			x_ddot += - F2*sym.sin(phi) / mass # F2, angle = pi/2 - phi
 			y_ddot = (-F1*sym.cos(theta) + Fn - mass*g) / mass
 			y_ddot += (F1_tp*sym.sin(theta) - F1_tm*sym.sin(theta)) / mass # friction on finger 1
-			y_ddot += F2*sym.cos(phi)
+			y_ddot += F2*sym.cos(phi) / mass
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) >= -DynamicsConstraintEps)
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) <= DynamicsConstraintEps)
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) >= -DynamicsConstraintEps)
 			
 			# torque constraints
 			tor_F1 = F1*d 
@@ -270,13 +272,13 @@ def center_mass(ax,X):
     
 
 if __name__=="__main__":
-	T = 50
+	T = 100
 	dt = 0.01
 
 	prog1 = TrajectoryOptimization()
 	params = np.array([T,dt])
 	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0])
-	theta_final = np.pi/6
+	theta_final = np.pi/3
 	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0])
 	initial_guess = {}
 	pos_over_time_var, F_over_time_var = prog1.add_dynamics_constraints(params, pos_init, pos_final)

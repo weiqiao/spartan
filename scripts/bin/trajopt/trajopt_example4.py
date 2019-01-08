@@ -15,6 +15,7 @@ from matplotlib.collections import PatchCollection
 
 # assume the first contact point is at distance d = 0.5 to the center of semicircle
 # assume the second force is always horizontal, in negative x-axis direction
+# DOES NOT WORK
 
 DynamicsConstraintEps = 0.0001
 mu_ground = 0.2
@@ -22,7 +23,7 @@ g = 9.8
 r = 1
 DistanceCentroidToCoM = 4*r/(3*np.pi)
 MaxInputForce = 100
-VISUALIZE = 1
+VISUALIZE = 0
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
@@ -60,7 +61,9 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			y_ddot = (-F1*sym.cos(theta) + Fn - mass*g) / mass
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) >= -DynamicsConstraintEps)
-			
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) <= DynamicsConstraintEps)
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) >= -DynamicsConstraintEps)
+
 			# torque constraints
 			tor_F1 = F1*d 
 			tor_F2 = F2*(r-y)
@@ -194,7 +197,7 @@ def center_mass(ax,X):
 if __name__=="__main__":
 	prog = TrajectoryOptimization()
 
-	T = 50
+	T = 100
 	dt = 0.01
 	d = 0.5
 	mass = 1

@@ -11,6 +11,7 @@ import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
 
 # use a single finger to rotate carrot 30 degrees without considering friction between finger and carrot
+# DOES NOT WORK
 
 DynamicsConstraintEps = 0.0001
 mu_ground = 0.5
@@ -18,7 +19,7 @@ g = 9.8
 r = 1
 DistanceCentroidToCoM = 4*r/(3*np.pi)
 MaxInputForce = 100
-VISUALIZE = 1
+VISUALIZE = 0
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
@@ -73,7 +74,9 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			# theta_ddot = theta_ddot/denominator
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) >= -DynamicsConstraintEps)
-			
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) <= DynamicsConstraintEps)
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) >= -DynamicsConstraintEps)
+
 			# # force expressions
 			# Ft = F1costheta*m*r*r0sintheta - F1costheta*m*r0costheta*r0sintheta - F1d*m*r + F1d*m*r0costheta - F1sintheta*I - F1sintheta*m*r0sintheta*r0sintheta - I*m*r0sintheta*theta_dot_squared + m**2*r*r0costheta*r0sintheta*theta_dot_squared - m**2*r0costheta*r0costheta*r0sintheta*theta_dot_squared - m**2*r0sintheta*r0sintheta*r0sintheta*theta_dot_squared + m*mg*r*r0sintheta - m*mg*r0costheta*r0sintheta
 			# Ft = Ft/denominator

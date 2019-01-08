@@ -152,7 +152,9 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			y_ddot += (F1_tp*sym.sin(theta) - F1_tm*sym.sin(theta)) / mass # friction on finger 1
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) >= -DynamicsConstraintEps)
-			
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) <= DynamicsConstraintEps)
+			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) >= -DynamicsConstraintEps)
+
 			# torque constraints
 			tor_F1 = F1*d 
 			tor_Fn = -Fn*(DistanceCentroidToCoM*sym.sin(theta))
