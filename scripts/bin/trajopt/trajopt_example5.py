@@ -74,7 +74,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddConstraint(x_dot_next - (x_dot + x_ddot*dt) >= -DynamicsConstraintEps)
 			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(y_dot_next - (y_dot + y_ddot*dt) >= -DynamicsConstraintEps)
-			
+
 			# torque constraints
 			tor_F1 = F1*d 
 			tor_Fn = -Fn*(DistanceCentroidToCoM*sym.sin(theta))
@@ -110,8 +110,9 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(d_next - (d+v1*dt) >= -DynamicsConstraintEps)
 
 			# finger 1 contact point constraint 
-			self.AddLinearConstraint(d >= PositionConstraintEps)
-			self.AddLinearConstraint(d <= r-PositionConstraintEps)
+			# note that positive d direction and positive x axis are opposite, so d+ = d - v1*dt
+			self.AddLinearConstraint(d_next - (d-v1*dt) <= DynamicsConstraintEps)
+			self.AddLinearConstraint(d_next - (d-v1*dt) >= -DynamicsConstraintEps)
 
 			# finger 2 contact point constraint
 			self.AddConstraint(d*sym.cos(phi-theta)+r-omega <= DynamicsConstraintEps)
@@ -266,9 +267,6 @@ def draw_force(ax,X,F):
 	ax.arrow(x_Ft,y_Ft,dx_Ft,dy_Ft,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_F2,y_F2,dx_F2,dy_F2,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_G,y_G,dx_G,dy_G,color=(1,0,1),head_width=0.05, head_length=0.1)
-
-def center_mass(ax,X):
-    x,y,theta,x_dot,y_dot,theta_dot=X
     
 
 if __name__=="__main__":
@@ -277,9 +275,9 @@ if __name__=="__main__":
 
 	prog1 = TrajectoryOptimization()
 	params = np.array([T,dt])
-	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0])
+	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0,0.5])
 	theta_final = np.pi/3
-	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0])
+	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0,0.5])
 	initial_guess = {}
 	pos_over_time_var, F_over_time_var = prog1.add_dynamics_constraints(params, pos_init, pos_final)
 	solver = IpoptSolver()

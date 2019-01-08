@@ -189,9 +189,6 @@ def draw_force(ax,X,F):
 	ax.arrow(x_Fn,y_Fn,dx_Fn,dy_Fn,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_Ft,y_Ft,dx_Ft,dy_Ft,color=(1,0,1),head_width=0.05, head_length=0.1)
 	ax.arrow(x_G,y_G,dx_G,dy_G,color=(1,0,1),head_width=0.05, head_length=0.1)
-
-def center_mass(ax,X):
-    x,y,theta,x_dot,y_dot,theta_dot=X
     
 
 if __name__=="__main__":
