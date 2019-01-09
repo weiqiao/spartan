@@ -41,7 +41,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 		# F1_tp: friction of finger 1 in positive direction
 		# F1_tm: friction of finger 2 in negative direction
 		# gamma1: slack variable for v1
-		# v1: velocity of d
+		# v1: velocity of d (negative direction)
 		# d: distance from finger 1 contact point to geometric center of semicircle
 		F = self.NewContinuousVariables(10,'F_%d' % 0) 
 		F_over_time = F
