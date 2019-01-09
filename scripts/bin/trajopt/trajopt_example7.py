@@ -28,7 +28,7 @@ MaxInputForce = 100
 MaxRelVel = 0.2
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 OptimizationSlackEps = 0.01
-VISUALIZE = 1
+VISUALIZE = 0
 USE_GOOD_INITIAL_GUESS = 0 
 
 class TrajectoryOptimization(mp.MathematicalProgram):
@@ -364,9 +364,17 @@ if __name__=="__main__":
 	initial_guess = {}
 	pos_over_time_var, F_over_time_var = prog1.add_dynamics_constraints(params, pos_init, pos_final)
 	solver = IpoptSolver()
+	# # Ipopt solver options: https://www.coin-or.org/Ipopt/documentation/node40.html
+	# prog1.SetSolverOption(mp.SolverType.kIpopt, "max_iter", 10000)
 	start_time = time.time()
 	result = solver.Solve(prog1)
+	# # if use snopt solver
+	# # Snopt solver options: http://www.ccom.ucsd.edu/~peg/papers/sndoc7.pdf
+	# prog1.SetSolverOption(mp.SolverType.kSnopt, "Major iterations limit", 10000)
+	# prog1.SetSolverOption(mp.SolverType.kSnopt, "Print file", "iterations_info_log.txt")
+	# result = prog1.Solve()
 	solve_time = time.time() - start_time
+	print(result)
 	assert result == mp.SolutionResult.kSolutionFound
 	print(solve_time)
 	pos_over_time = prog1.get_solution(pos_over_time_var)
