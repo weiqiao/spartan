@@ -5,7 +5,8 @@ import numpy as np
 def linearize(X,F,params):
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[:11] # mass, inertia
+	idx = params[0]
+	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 
 	A = np.identity(len(X))
 	B = np.zeros((len(X),len(F)))
@@ -45,7 +46,8 @@ def df(X,F,params):
 	# compute the linearization of f around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[:11] # mass, inertia
+	idx = params[0]
+	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
 	df_dx = 0
 	df_dy = 0
@@ -81,7 +83,8 @@ def dg(X,F,params):
 	# compute the linearization of g around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[:11] # mass, inertia
+	idx = params[0]
+	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
 	dg_dx = 0
 	dg_dy = 0
@@ -118,7 +121,8 @@ def dh(X,F,params):
 	# compute the linearization of h around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[:11] # mass, inertia
+	idx = params[0]
+	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	r0 = DistanceCentroidToCoM
 
 	dh_dx = 0
@@ -155,8 +159,9 @@ def constraints(X,F,params):
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	#7, 8,     9,     10,     11, 12, 13, 14, 15,    16,    17,  18
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[:11] # mass, inertia
-	StateBound = np.array([np.array(params[11:17]),np.array(params[17:23])])
+	idx = params[0]
+	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
+	StateBound = np.array([np.array(params[idx+1:idx+7]),np.array(params[idx+7:idx+13])])
 	r0 = DistanceCentroidToCoM # alias
 
 	# the output is of the form H [X,U] <= h
@@ -417,5 +422,59 @@ def constraints(X,F,params):
 		h2 = StateBound[1,i]
 		H = np.vstack((H, cons))
 		h = np.vstack((h, h2))
+
+	## contacts finger 1 sliding up, finger 2 sticking
+	# -v1<=0 (actually should be strict inequality)
+	cons = np.zeros(len_h)
+	cons[11] = -1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# -gamma1<=0 (actually should be strict inequality)
+	cons = np.zeros(len_h)
+	cons[10] = -1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# v1-gamma1<=0
+	cons = np.zeros(len_h)
+	cons[11] = 1
+	cons[10] = -1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# -(v1-gamma1)<=0
+	cons = np.zeros(len_h)
+	cons[11] = -1
+	cons[10] = 1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# -F1tp<=0 
+	cons = np.zeros(len_h)
+	cons[8] = -1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# F1tp<=0 
+	cons = np.zeros(len_h)
+	cons[8] = 1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# -mu_f*F1 + F1tm <= 0
+	cons = np.zeros(len_h)
+	cons[7] = -mu_finger
+	cons[9] = 1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
+	# mu_f*F1 - F1tm <= 0
+	cons = np.zeros(len_h)
+	cons[7] = mu_finger
+	cons[9] = -1
+	h2 = 0
+	H = np.vstack((H, cons))
+	h = np.vstack((h, h2))
 
 	return H,h

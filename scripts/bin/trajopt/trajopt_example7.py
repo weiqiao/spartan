@@ -9,6 +9,7 @@ import pydrake.symbolic as sym
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
+import pickle
 
 # use two fingers to rotate carrot while considering friction between both fingers and carrot
 # two contact points can move
@@ -30,6 +31,7 @@ StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 OptimizationSlackEps = 0.01
 VISUALIZE = 0
 USE_GOOD_INITIAL_GUESS = 0 
+SAVE_STATE_AND_CONTROL = 0
 
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
@@ -382,3 +384,15 @@ if __name__=="__main__":
 	if VISUALIZE:
 		for t in range(T):
 			visualize(pos_over_time[t,:],F_over_time[t,:],t)
+
+	if SAVE_STATE_AND_CONTROL:
+		params_save = np.array([11])
+		params_save = np.append(params_save,np.array([mass, inertia, DistanceCentroidToCoM, r, dt, 
+			DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel]))
+		params_save = np.append(params_save,StateBound[0,:])
+		params_save = np.append(params_save,StateBound[1,:])
+		params_save = np.append(params_save,pos_init)
+		params_save = np.append(params_save,pos_final)
+		params_save = np.append(params_save,[T])
+		state_and_control = {"state": pos_over_time, "control":F_over_time, "params": params_save}
+		pickle.dump( state_and_control, open("example_7_sol.p","wb"))
