@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Dec  4 15:21:17 2018
+
 @author: sadra
 """
 
 import numpy as np
 import scipy as sp
+import scipy.linalg
 from gurobipy import Model,GRB,LinExpr
 
 import time as time
