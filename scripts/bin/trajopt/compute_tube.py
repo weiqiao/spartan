@@ -34,9 +34,13 @@ if __name__=="__main__":
 	list_of_cells = []
 	for t in range(T):
 		v1 = F_over_time[t,4]
-		if np.abs(v1) < 0.001:
-			A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		elif v1 > 0.001:
+		# if np.abs(v1) < 0.001:
+		# 	A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		# elif v1 > 0.001:
+		# 	A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		# else:
+		# 	A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		if v1 > 0:
 			A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		else:
 			A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
@@ -64,4 +68,9 @@ if __name__=="__main__":
 		
 	pos_init = params[idx+13:idx+20]
 	x0 = pos_init.reshape((-1,1))
-	(x,u,G,theta)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells,sys.goal,eps=1,order=1,scale=sys.scale)
+	pos_final = params[idx+20:idx+27]
+	n = 7
+	epsilon = 0.01
+	goal=zonotope(pos_final.reshape(-1,1),np.eye(n)*epsilon)
+
+	(x,u,G,theta)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells,goal,eps=1,order=1)

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np 
+g = 9.8
 
 def linearize(X,F,params):
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	idx = params[0]
+	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 
 	A = np.identity(len(X))
@@ -46,7 +47,7 @@ def df(X,F,params):
 	# compute the linearization of f around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	idx = params[0]
+	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
 	df_dx = 0
@@ -83,7 +84,7 @@ def dg(X,F,params):
 	# compute the linearization of g around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	idx = params[0]
+	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
 	dg_dx = 0
@@ -121,7 +122,7 @@ def dh(X,F,params):
 	# compute the linearization of h around the current point (X,F)
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	idx = params[0]
+	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	r0 = DistanceCentroidToCoM
 
@@ -159,7 +160,7 @@ def constraints(X,F,params):
 	x,y,theta,x_dot,y_dot,theta_dot,d = X
 	#7, 8,     9,     10,     11, 12, 13, 14, 15,    16,    17,  18
 	F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi, omega = F
-	idx = params[0]
+	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	StateBound = np.array([np.array(params[idx+1:idx+7]),np.array(params[idx+7:idx+13])])
 	r0 = DistanceCentroidToCoM # alias
@@ -192,7 +193,7 @@ def constraints(X,F,params):
 	cons[17] = d*np.cos(phi-theta)
 	cons[2] = -d*np.cos(phi-theta)
 	cons[18] = -1
-	h1 = -np.sin(phi-theta)*d - d*np.cos(phi-theta)*phi + d*np.cos(phi-theta)*theta + w
+	h1 = -np.sin(phi-theta)*d - d*np.cos(phi-theta)*phi + d*np.cos(phi-theta)*theta + omega
 	H = np.vstack((H,cons))
 	h = np.vstack((h, -h1 + DynamicsConstraintEps))
 	H = np.vstack((H, -cons))

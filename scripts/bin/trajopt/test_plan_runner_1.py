@@ -4,6 +4,8 @@ import time
 import numpy as np
 
 import rospy
+import tf2_ros
+import tf
 import actionlib
 import robot_msgs.msg
 import robot_msgs.srv
@@ -11,7 +13,8 @@ import trajectory_msgs.msg
 import geometry_msgs.msg
 import sensor_msgs.msg
 import std_srvs.srv
-
+import spartan.utils.transformations as transformations
+from pyquaternion import Quaternion
 import robot_control.control_utils as control_utils
 import spartan.utils.ros_utils as ros_utils
 
@@ -72,7 +75,22 @@ def make_cartesian_gains_msg(kp_rot = 5,kp_trans = 10):
 
     return msg
 
+def tf_matrix_from_pose(pose):
+    trans, quat = pose
+    mat = transformations.quaternion_matrix(quat)
+    mat[:3, 3] = trans
+    return mat
+
+def get_relative_tf_between_poses(pose_1, pose_2):
+    tf_1 = tf_matrix_from_pose(pose_1)
+    tf_2 = tf_matrix_from_pose(pose_2)
+    return np.linalg.inv(tf_1).dot(tf_2)
+
 def test_task_space_streaming():
+    #rospy.init_node('sandbox', anonymous=True)
+    tfBuffer = tf2_ros.Buffer()
+    listener = tf2_ros.TransformListener(tfBuffer)
+
     rospy.wait_for_service("plan_runner/init_task_space_streaming")
     sp = rospy.ServiceProxy('plan_runner/init_task_space_streaming',
         robot_msgs.srv.StartStreamingPlan)
@@ -89,35 +107,53 @@ def test_task_space_streaming():
 
     start_time = time.time()
     new_msg = robot_msgs.msg.CartesianGoalPoint()
+    quat_interpolation_number = 1000
+    quat_interpolation_array = np.linspace(2.0, 3.0, num=quat_interpolation_number)
+    quat_interpolation_cnt = 0
+    while (time.time() - start_time < 1):
 
-    pos = [0.63, 0.0, 0.15]
-    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
-    '''
-    goal = make_cartesian_trajectory_goal_world_frame(
-        pos,
-        quat,
-        duration = 5.)
-    '''
-    #for i in range(10):
-    new_msg.xyz_point.header.frame_id = "iiwa_link_ee"
-    new_msg.xyz_point.point.x = 0 #pos[0]
-    new_msg.xyz_point.point.y = 0.01 #pos[1]
-    new_msg.xyz_point.point.z = 0 #pos[2]
-    new_msg.xyz_d_point.x = 0.
-    new_msg.xyz_d_point.y = 0.
-    new_msg.xyz_d_point.z = 0.0
-    new_msg.quaternion.w = 1 #quat[0]
-    new_msg.quaternion.x = 0 #quat[1]
-    new_msg.quaternion.y = 0 #quat[2]
-    new_msg.quaternion.z = 0 #quat[3]
-    new_msg.gain = make_cartesian_gains_msg(50,10)
-    new_msg.ee_frame_id = "iiwa_link_ee"
+        pos = [0.63, 0.0, 0.15]
+        quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+
+        pose_2 = tuple((pos,quat))
+        frame_name = "iiwa_link_ee"
+        try:
+            current_pose_ee = ros_utils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+
+        rel_pose = get_relative_tf_between_poses(current_pose_ee,pose_2)
+        rel_q = transformations.quaternion_from_matrix(rel_pose)
+        rel_trans = rel_pose[:3,3]
+        rel_trans = np.clip(rel_trans,-0.01, 0.01)
+        #print tuple((rel_trans,rel_q))
+        q0 = Quaternion(quat)
+        q1 = Quaternion(current_pose_ee[1])
+        q = Quaternion.slerp(q0,q1,quat_interpolation_array[quat_interpolation_cnt])
+        #quat_interpolation_cnt += 1
+        #quat_interpolation_cnt = min(quat_interpolation_cnt,quat_interpolation_number-1)
+        #for i in range(10):
+        new_msg.xyz_point.header.frame_id = "base"
+        new_msg.xyz_point.point.x = current_pose_ee[0][0]+rel_trans[0]
+        new_msg.xyz_point.point.y = current_pose_ee[0][1]+rel_trans[1]
+        new_msg.xyz_point.point.z = current_pose_ee[0][2]+rel_trans[2]
+        new_msg.xyz_d_point.x = 0.
+        new_msg.xyz_d_point.y = 0.
+        new_msg.xyz_d_point.z = 0.0
+        new_msg.quaternion.w = q[0] #rel_q[0]
+        new_msg.quaternion.x = q[1] #rel_q[1]
+        new_msg.quaternion.y = q[2] #rel_q[2]
+        new_msg.quaternion.z = q[3] #rel_q[3]
+        new_msg.gain = make_cartesian_gains_msg(50,10)
+        new_msg.ee_frame_id = "iiwa_link_ee"
     
-    while (time.time() - start_time < 10):
         pub.publish(new_msg)
-        time.sleep(0.001)
+        time.sleep(0.1)
         #print "goal",i
-        print time.time() - start_time 
+        #print time.time() - start_time 
     start_time = time.time()
     #time.sleep(3)
     rospy.wait_for_service("plan_runner/stop_plan")
