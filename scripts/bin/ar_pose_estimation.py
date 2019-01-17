@@ -15,7 +15,7 @@ import geometry_msgs.msg
 import trajectory_msgs.msg
 import rosgraph
 import tf2_ros
-
+import std_msgs
 
 # spartan
 from spartan.utils.ros_utils import JointStateSubscriber
@@ -46,6 +46,7 @@ class ARPoseEst():
 		rospy.wait_for_message('ar_pose_marker', AlvarMarkers)
 		# Subscribe to the ar_pose_marker topic to get the image width and height
 		rospy.Subscriber('ar_pose_marker', AlvarMarkers, self.pose_est_call_back)
+		self.pub = rospy.Publisher('carrot_pose_pub',std_msgs.msg.Float32MultiArray,queue_size=1)
 
 	def pose_est_call_back(self, msg): 
 		try:
@@ -67,6 +68,9 @@ class ARPoseEst():
 			if np.cross(y_axis_init,y_axis).dot(np.array([0,0,1])) > 0:
 				angle = -angle
 			print('degree = %.2f'%(angle/np.pi*180))
+			new_msg = std_msgs.msg.Float32MultiArray(data=[angle,pos_x])
+			self.pub.publish(new_msg)
+
 		except:
 			return
 

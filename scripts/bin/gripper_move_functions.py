@@ -29,5 +29,269 @@ from spartan.manipulation.schunk_driver import SchunkDriver
 # spartan ROS
 import robot_msgs.msg
 
-	
-	
+
+
+def make_cartesian_trajectory_goal_world_frame(pos, quat, duration):
+
+    # (array([0.588497  , 0.00716426, 0.5159925 ]), array([ 0.70852019, -0.15500524,  0.67372875,  0.1416407 ]))
+
+
+    goal = robot_msgs.msg.CartesianTrajectoryGoal()
+    traj = goal.trajectory
+
+    # frame_id = "iiwa_link_ee"
+    frame_id = "base"
+    ee_frame_id = "iiwa_link_ee"
+    
+    xyz_knot = geometry_msgs.msg.PointStamped()
+    xyz_knot.header.frame_id = frame_id
+    xyz_knot.point.x = 0
+    xyz_knot.point.y = 0
+    xyz_knot.point.z = 0
+    traj.xyz_points.append(xyz_knot)
+
+    xyz_knot = geometry_msgs.msg.PointStamped()
+    xyz_knot.header.frame_id = frame_id
+    xyz_knot.point.x = pos[0]
+    xyz_knot.point.y = pos[1]
+    xyz_knot.point.z = pos[2]
+
+    traj.xyz_points.append(xyz_knot)
+
+    traj.ee_frame_id = ee_frame_id
+
+    traj.time_from_start.append(rospy.Duration(0.0))
+    traj.time_from_start.append(rospy.Duration(duration))
+
+    quat_msg = geometry_msgs.msg.Quaternion()
+    quat_msg.w = quat[0]
+    quat_msg.x = quat[1]
+    quat_msg.y = quat[2]
+    quat_msg.z = quat[3]
+
+    traj.quaternions.append(quat_msg)
+
+    return goal
+
+def make_cartesian_trajectory_goal_gripper_frame(pos, quat, duration):
+    # (array([0.588497  , 0.00716426, 0.5159925 ]), array([ 0.70852019, -0.15500524,  0.67372875,  0.1416407 ]))
+
+    # Barely touching tabletop
+
+    goal = robot_msgs.msg.CartesianTrajectoryGoal()
+    traj = goal.trajectory
+
+    # frame_id = "iiwa_link_ee"
+    frame_id = "iiwa_link_ee"
+    ee_frame_id = "iiwa_link_ee"
+    
+    xyz_knot = geometry_msgs.msg.PointStamped()
+    xyz_knot.header.frame_id = frame_id
+    xyz_knot.point.x = 0
+    xyz_knot.point.y = 0
+    xyz_knot.point.z = 0
+    traj.xyz_points.append(xyz_knot)
+
+    xyz_knot = geometry_msgs.msg.PointStamped()
+    xyz_knot.header.frame_id = frame_id
+    xyz_knot.point.x = pos[0]
+    xyz_knot.point.y = pos[1]
+    xyz_knot.point.z = pos[2]
+
+    traj.xyz_points.append(xyz_knot)
+
+    traj.ee_frame_id = ee_frame_id
+
+    traj.time_from_start.append(rospy.Duration(0.0))
+    traj.time_from_start.append(rospy.Duration(duration))
+
+    quat_msg = geometry_msgs.msg.Quaternion()
+    quat_msg.w = quat[0]
+    quat_msg.x = quat[1]
+    quat_msg.y = quat[2]
+    quat_msg.z = quat[3]
+
+    traj.quaternions.append(quat_msg)
+
+    return goal
+
+def make_cartesian_gains_msg(kp_rot, kp_trans):
+    msg = robot_msgs.msg.CartesianGain()
+
+    msg.rotation.x = kp_rot
+    msg.rotation.y = kp_rot
+    msg.rotation.z = kp_rot
+
+    msg.translation.x = kp_trans
+    msg.translation.y = kp_trans
+    msg.translation.z = kp_trans
+
+    return msg
+
+def make_force_guard_msg(scale):
+    msg = robot_msgs.msg.ForceGuard()
+    external_force = robot_msgs.msg.ExternalForceGuard()
+
+    body_frame = "iiwa_link_ee"
+    expressed_in_frame = "iiwa_link_ee"
+    force_vec = scale*np.array([-1,0,0])
+
+    external_force.force.header.frame_id = expressed_in_frame
+    external_force.body_frame = body_frame
+    external_force.force.vector.x = force_vec[0]
+    external_force.force.vector.y = force_vec[1]
+    external_force.force.vector.z = force_vec[2]
+
+    msg.external_force_guards.append(external_force)
+
+    return msg
+
+    
+def pregrasp():
+    pos = [0.63, 0.0, 0.15]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate -pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = -np.pi/4
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp1():
+    pos = [0.53, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(0., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp2():
+    pos = [0.53, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/3
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp3():
+    pos = [0.63, 0.0, 0.17]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/3
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+def postgrasp4():
+    pos = [0.63, 0.0, 0.36]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # rotate pi/4 degrees
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([0,1,0])
+    rot_theta = np.pi/3
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(0., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+if __name__ == "__main__":
+    rospy.init_node('sandboxx')
+    
+    robotSubscriber = JointStateSubscriber("/joint_states")
+    rospy.sleep(1.0)
+    
+    print("Moving to start position")
+
+    above_table_pre_grasp = [0.04486168762069299, 0.3256606458812486, -0.033502080520812445, -1.5769091802934694, 0.05899249087322813, 1.246379583616529, 0.38912999977004026]
+    targetPosition = above_table_pre_grasp
+
+    robotService = rosUtils.RobotService.makeKukaRobotService()
+    success = robotService.moveToJointPosition(targetPosition, timeout=5)
+
+    while len(robotSubscriber.joint_positions.keys()) < 3:
+        rospy.sleep(0.1)
+    print("Got full state, starting control")
+
+    # EE CONTROL VERSION
+    client = actionlib.SimpleActionClient("plan_runner/CartesianTrajectory", robot_msgs.msg.CartesianTrajectoryAction)
+    print "waiting for EE action server"
+    client.wait_for_server()
+    print "connected to EE action server"
+
+    handDriver = SchunkDriver()
+    handDriver.reset_and_home()
+    rospy.sleep(3)
+    handDriver.sendOpenGripperCommand()
+    rospy.sleep(3)
+    i = 0
+    for goal in [pregrasp(),
+                 postgrasp1(),
+                 postgrasp2(),
+                 postgrasp3(),
+                 postgrasp4()]:
+        print "sending goal"
+        client.send_goal(goal)
+        rospy.loginfo("waiting for CartesianTrajectory action result")
+        client.wait_for_result()
+        result = client.get_result()
+        if i==0:
+            handDriver.sendCloseGripperCommand()
+            rospy.sleep(3)
+        elif i==3:
+            handDriver.sendOpenGripperCommand()
+            rospy.sleep(3)
+
+        i+=1
+
+
+
+
