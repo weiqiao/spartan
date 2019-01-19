@@ -29,9 +29,9 @@ MaxInputForce = 100
 MaxRelVel = 0.005
 StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2],[4,1,np.pi,2,2,2]])
 OptimizationSlackEps = 0.01
-VISUALIZE = 0
+VISUALIZE = 1
 USE_GOOD_INITIAL_GUESS = 0 
-SAVE_STATE_AND_CONTROL = 0
+SAVE_STATE_AND_CONTROL = 1
 
 class TrajectoryOptimization(mp.MathematicalProgram):
 	def add_dynamics_constraints(self, params, pos_init, pos_final):
@@ -170,16 +170,25 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(phi >= theta)
 			self.AddLinearConstraint(phi - theta <= np.pi/2)
 			self.AddLinearConstraint(phi >= np.pi/3)
-			self.AddLinearConstraint(phi <= np.pi*5/6)
+			self.AddLinearConstraint(phi <= np.pi*2/3)
 
 			# phi shouldn't change too much
-			PhiChangeEps = 1/180*np.pi
+			PhiChangeMax = np.pi*2/180
+			PhiChangeMin = np.pi*0.3/180
 			if t > 0:
 				phi_prev = F_over_time[t-1,-2]
-				self.AddLinearConstraint(phi-phi_prev <= PhiChangeEps)
-				self.AddLinearConstraint(phi_prev-phi <= PhiChangeEps)
+				self.AddLinearConstraint(phi-phi_prev <= PhiChangeMax)
+				self.AddLinearConstraint(phi_prev-phi <= PhiChangeMax)
+				#self.AddConstraint((phi-phi_prev)*(phi-phi_prev) >= PhiChangeMin**2)
 			if t == T-1:
 				self.AddLinearConstraint(phi - pos_final[2] <= DynamicsConstraintEps)
+			# if t == 0:
+			# 	self.AddLinearConstraint(phi <= np.pi/2.0+2.0/180.0*np.pi)
+			# 	self.AddLinearConstraint(phi >= np.pi/2.0-2.0/180.0*np.pi)
+
+			if t > 0:
+				theta_prev = pos_over_time[t-1,2]
+				self.AddLinearConstraint(theta - theta_prev >= 0)
 
 		# initial state constraint
 		for i in range(n):
@@ -233,7 +242,7 @@ def visualize(X,F,t):
     draw_left_finger(ax1,X,F)
     draw_right_finger(ax1,X,F)
     t += 1
-    fig.savefig('trajopt_example8_fig/carrot_%d.png'%t, dpi=100)
+    fig.savefig('trajopt_example8_fig_latest/carrot_%d.png'%t, dpi=100)
     plt.close()
     return fig
 
@@ -364,7 +373,7 @@ def draw_right_finger(ax, X, F):
 
 
 if __name__=="__main__":
-	T = 250
+	T = 100
 	dt = 0.01
 
 	prog1 = TrajectoryOptimization()
@@ -405,4 +414,4 @@ if __name__=="__main__":
 		params_save = np.append(params_save,pos_final)
 		params_save = np.append(params_save,[T])
 		state_and_control = {"state": pos_over_time, "control":F_over_time, "params": params_save}
-		pickle.dump( state_and_control, open("example_8sol.p","wb"))
+		pickle.dump( state_and_control, open("trajopt_example8_latest.p","wb"))

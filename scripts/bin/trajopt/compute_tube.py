@@ -12,10 +12,13 @@ import carrot_linearization_2 as calin2
 import carrot_linearization_3 as calin3
 import poly_trajectory as polytraj 
 from pwa_system import system, linear_cell
+import pickle
 
+
+SAVE_OUTPUT = 1
 if __name__=="__main__":
-
-	state_and_control = pickle.load(open("example_7_sol.p","rb"))
+	file_name = "example_8sol_T200_nolowerboundondphi"
+	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	F_over_time = state_and_control["control"]
 	params = state_and_control["params"]
@@ -31,8 +34,9 @@ if __name__=="__main__":
 	'''
 	idx = int(params[0])
 	T = int(params[idx+27])
+	t0 = int(T/4*2)
 	list_of_cells = []
-	for t in range(T):
+	for t in range(t0,T):
 		v1 = F_over_time[t,4]
 		# if np.abs(v1) < 0.001:
 		# 	A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
@@ -66,7 +70,7 @@ if __name__=="__main__":
 
 		# sys.build_cells()
 		
-	pos_init = params[idx+13:idx+20]
+	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
 	pos_final = params[idx+20:idx+27]
 	n = 7
@@ -74,3 +78,7 @@ if __name__=="__main__":
 	goal=zonotope(pos_final.reshape(-1,1),np.eye(n)*epsilon)
 
 	(x,u,G,theta)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells,goal,eps=1,order=1)
+
+	if SAVE_OUTPUT:
+		output = {"x": x, "u":u, "G": G, "theta": theta}
+		pickle.dump( output, open(file_name+"_tube_output.p","wb"))
