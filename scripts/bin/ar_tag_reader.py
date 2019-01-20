@@ -53,7 +53,7 @@ class ARReader():
 				ori_z = marker.pose.pose.orientation.z
 				ori_w = marker.pose.pose.orientation.w
 				print('recording initial pose\n')
-				f = open('./initial_pose2.csv', 'w')
+				f = open('./initial_pose.csv', 'w')
 				f.write('%.6f, %.6f, %.6f, %.6f, %.6f, %.6f, %.6f\n'%(pos_x,pos_y,pos_z,ori_x,ori_y,ori_z,ori_w))
 				f.close()
 				self.status = 1

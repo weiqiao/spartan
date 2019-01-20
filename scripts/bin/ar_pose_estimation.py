@@ -38,7 +38,7 @@ class ARPoseEst():
 		rospy.init_node("ar_pose_est")
 		# get initial pose
 		self.pose = []
-		f = open('./initial_pose2.csv', 'r')
+		f = open('./initial_pose.csv', 'r')
 		for line in f:
 			for word in line.split(','):
 				self.pose.append(float(word))

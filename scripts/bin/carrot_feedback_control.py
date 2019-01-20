@@ -6,6 +6,7 @@ import os
 import numpy as np
 import time
 import socket
+import pickle
 
 # ROS
 import rospy
@@ -33,6 +34,8 @@ import robot_msgs.msg
 import robot_msgs.srv
 
 
+data = [0.0,0.0]
+file_name = "trajopt_example8_T100_phialwaysincreasing"
 
 def make_cartesian_trajectory_goal_world_frame(pos, quat, duration):
 
@@ -191,7 +194,24 @@ def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.
     quat = transformations.quaternion_from_matrix(mat)
     
     pose_new = [trans_new,quat.tolist()]
-    return pose_new
+
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    new_msg.xyz_point.header.frame_id = "base"
+    new_msg.xyz_point.point.x = pose_new[0][0]
+    new_msg.xyz_point.point.y = pose_new[0][1]
+    new_msg.xyz_point.point.z = pose_new[0][2]
+    new_msg.xyz_d_point.x = 0.
+    new_msg.xyz_d_point.y = 0.
+    new_msg.xyz_d_point.z = 0.0
+    new_msg.quaternion.w = pose_new[1][0]
+    new_msg.quaternion.x = pose_new[1][1]
+    new_msg.quaternion.y = pose_new[1][2]
+    new_msg.quaternion.z = pose_new[1][3]
+    new_msg.gain = make_cartesian_gains_msg(50,10)
+    new_msg.ee_frame_id = "iiwa_link_ee"
+
+    return new_msg, phi + dphi 
 
 def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,dalpha,dx=[0.0,0.0]):
     trans, quat = pose_cur
@@ -202,9 +222,26 @@ def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,da
     trans_new[2] += dz + dx[1]
 
     pose_new = [trans_new,quat]
-    return pose_new
 
-def test_task_space_streaming():
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    new_msg.xyz_point.header.frame_id = "base"
+    new_msg.xyz_point.point.x = pose_new[0][0]
+    new_msg.xyz_point.point.y = pose_new[0][1]
+    new_msg.xyz_point.point.z = pose_new[0][2]
+    new_msg.xyz_d_point.x = 0.
+    new_msg.xyz_d_point.y = 0.
+    new_msg.xyz_d_point.z = 0.0
+    new_msg.quaternion.w = pose_new[1][0]
+    new_msg.quaternion.x = pose_new[1][1]
+    new_msg.quaternion.y = pose_new[1][2]
+    new_msg.quaternion.z = pose_new[1][3]
+    new_msg.gain = make_cartesian_gains_msg(50,10)
+    new_msg.ee_frame_id = "iiwa_link_ee"
+
+    return new_msg
+
+def carrot_open_loop():
     #rospy.init_node('sandbox', anonymous=True)
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
@@ -213,6 +250,7 @@ def test_task_space_streaming():
     sp = rospy.ServiceProxy('plan_runner/init_task_space_streaming',
         robot_msgs.srv.StartStreamingPlan)
     init = robot_msgs.srv.StartStreamingPlanRequest()
+    rospy.sleep(1)
     #init.force_guard.append(make_force_guard_msg())
     print sp(init)
     pub = rospy.Publisher('plan_runner/task_space_streaming_setpoint',
@@ -233,91 +271,510 @@ def test_task_space_streaming():
         print("Troubling looking up tf...")
         rate.sleep()
 
-    
+    # load offline controller
+    state_and_control = pickle.load(open(file_name+".p","rb"))
+    pos_over_time = state_and_control["state"]
+    F_over_time = state_and_control["control"]
+    params = state_and_control["params"]
+
     phi = np.pi/2
-    for ttt in range(30):
-        new_msg = robot_msgs.msg.CartesianGoalPoint()
-        frame_name = "iiwa_link_ee"
+    alpha = 0.05
+    idx = int(params[0])
+    T = int(params[idx+27])
+    r0 = params[3]
+
+    # fix initial state
+    t = 0
+    x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
+    F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi0, omega = F_over_time[t,:]
+    x_centroid = x - r0*np.sin(theta)
+    y_centroid = y + r0*np.cos(theta)
+    x_F1 = x_centroid-d*np.cos(theta)
+    y_F1 = y_centroid-d*np.sin(theta)
+
+    phi = phi0 
+    frame_name = "iiwa_link_ee"
+    # try:
+    #     current_pose_ee = rosUtils.poseFromROSTransformMsg(
+    #         tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+    #     #print current_pose_ee
+    # except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+    #     print("Troubling looking up tf...")
+    #     rate.sleep()
+    # dphi = phi0 - phi 
+    # print "dphi=",dphi
+    # new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
+    # start_time = time.time()
+    # while (time.time() - start_time < 0.5):        
+    #     pub.publish(new_msg)
+    #     time.sleep(0.1)
+    # alpha    
+    dalpha = omega / 2.0 - alpha 
+    print "dalpha = ", dalpha
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        #print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+    new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
+    start_time = time.time()
+    while (time.time() - start_time < 1):
+        pub.publish(new_msg)
+        handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+        time.sleep(1)
+    alpha += dalpha
+
+    for t in range(1,T):
+        x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
+        F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi_next, omega = F_over_time[t,:]
+        x_centroid = x - r0*np.sin(theta)
+        y_centroid = y + r0*np.cos(theta)
+        x_F1_next = x_centroid-d*np.cos(theta)
+        y_F1_next = y_centroid-d*np.sin(theta)
+        dx = x_F1_next - x_F1
+        dy = y_F1_next - y_F1 
+        x_F1 = x_F1_next
+        y_F1 = y_F1_next
+
+        #frame_name = "iiwa_link_ee"
+        # phi 
         try:
             current_pose_ee = rosUtils.poseFromROSTransformMsg(
                 tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            print current_pose_ee
+            #print current_pose_ee
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Troubling looking up tf...")
             rate.sleep()
-
-        dphi = np.pi*1/180
-        pose_new = rotate_around_left_finger_tip(current_pose_ee,dphi,phi)
-        phi += dphi
-        print pose_new 
+        dphi = phi_next - phi 
+        dalpha = omega / 2.0 - alpha 
+        print "dphi=",dphi/np.pi * 180.0, "dalpha=",dalpha, "dx=",dx,"dy=",dy
+        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha,[dx,dy])
         start_time = time.time()
-        while (time.time() - start_time < 0.5):
-            new_msg.xyz_point.header.frame_id = "base"
-            new_msg.xyz_point.point.x = pose_new[0][0]
-            new_msg.xyz_point.point.y = pose_new[0][1]
-            new_msg.xyz_point.point.z = pose_new[0][2]
-            new_msg.xyz_d_point.x = 0.
-            new_msg.xyz_d_point.y = 0.
-            new_msg.xyz_d_point.z = 0.0
-            new_msg.quaternion.w = pose_new[1][0]
-            new_msg.quaternion.x = pose_new[1][1]
-            new_msg.quaternion.y = pose_new[1][2]
-            new_msg.quaternion.z = pose_new[1][3]
-            new_msg.gain = make_cartesian_gains_msg(50,10)
-            new_msg.ee_frame_id = "iiwa_link_ee"
-        
+        while (time.time() - start_time < 0.5):        
             pub.publish(new_msg)
             time.sleep(0.1)
-
-    alpha = 0.05
-    for ttt in range(4):
-        new_msg = robot_msgs.msg.CartesianGoalPoint()
-        frame_name = "iiwa_link_ee"
+        # alpha    
         try:
             current_pose_ee = rosUtils.poseFromROSTransformMsg(
                 tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            print current_pose_ee
+            #print current_pose_ee
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Troubling looking up tf...")
             rate.sleep()
-
-        dalpha = -0.01
-        pose_new = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
-        print pose_new 
+        new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
         start_time = time.time()
         while (time.time() - start_time < 1):
-            new_msg.xyz_point.header.frame_id = "base"
-            new_msg.xyz_point.point.x = pose_new[0][0]
-            new_msg.xyz_point.point.y = pose_new[0][1]
-            new_msg.xyz_point.point.z = pose_new[0][2]
-            new_msg.xyz_d_point.x = 0.
-            new_msg.xyz_d_point.y = 0.
-            new_msg.xyz_d_point.z = 0.0
-            new_msg.quaternion.w = pose_new[1][0]
-            new_msg.quaternion.x = pose_new[1][1]
-            new_msg.quaternion.y = pose_new[1][2]
-            new_msg.quaternion.z = pose_new[1][3]
-            new_msg.gain = make_cartesian_gains_msg(50,10)
-            new_msg.ee_frame_id = "iiwa_link_ee"
-        
             pub.publish(new_msg)
-            handDriver.sendGripperCommand(2*(alpha+dalpha), force=80, speed=0.05)
-            alpha += dalpha
+            handDriver.sendGripperCommand(omega, force=80, speed=0.05)
             time.sleep(1)
-
+        alpha += dalpha
 
     rospy.wait_for_service("plan_runner/stop_plan")
     sp = rospy.ServiceProxy('plan_runner/stop_plan',
         std_srvs.srv.Trigger)
     init = std_srvs.srv.TriggerRequest()
     print sp(init)
+
+
+def prepose_for_closed_loop():
+    pos = [0.63, 0., 0.164]
+    quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+
+    # # load offline controller
+    # state_and_control = pickle.load(open("example_8sol.p","rb"))
+    # F_over_time = state_and_control["control"]
+    # phi = np.pi/2.0
+    # phi_next = F_over_time[0,-2]
+    # dphi = phi_next - phi  
+    # print "phi=",phi,"phi_next=",phi_next,"dphi=",dphi
+    # # rotate phi degrees counter-clockwise
+    # mat = transformations.quaternion_matrix(quat)
+    # mat = mat[:3,:3]
+    # rot_axis = np.array([1,0,0])
+    # rot_theta = dphi
+    # rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    # mat = rot_mat.dot(mat)
+    # quat = transformations.quaternion_from_matrix(mat)
     
+    # # rotate -pi/4 degrees
+    # mat = transformations.quaternion_matrix(quat)
+    # mat = mat[:3,:3]
+    # rot_axis = np.array([0,1,0])
+    # rot_theta = -np.pi/4
+    # rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    # mat = rot_mat.dot(mat)
+    # quat = transformations.quaternion_from_matrix(mat)
+    # print quat
+    # make goal
+    goal = make_cartesian_trajectory_goal_world_frame(
+        pos,
+        quat,
+        duration = 5.)
+    goal.gains.append(make_cartesian_gains_msg(50., 10.))
+    goal.force_guard.append(make_force_guard_msg(15.))
+    return goal
+
+
+    return 
+
+def carrot_closed_loop_initial_pose():
+    tfBuffer = tf2_ros.Buffer()
+    listener = tf2_ros.TransformListener(tfBuffer)
+
+    rospy.wait_for_service("plan_runner/init_task_space_streaming")
+    sp = rospy.ServiceProxy('plan_runner/init_task_space_streaming',
+        robot_msgs.srv.StartStreamingPlan)
+    init = robot_msgs.srv.StartStreamingPlanRequest()
+    rospy.sleep(1)
+    #init.force_guard.append(make_force_guard_msg())
+    print sp(init)
+    pub = rospy.Publisher('plan_runner/task_space_streaming_setpoint',
+        robot_msgs.msg.CartesianGoalPoint, queue_size=1)
+    robotSubscriber = rosUtils.JointStateSubscriber("/joint_states")
+    print("Waiting for full kuka state...")
+    while len(robotSubscriber.joint_positions.keys()) < 3:
+        rospy.sleep(0.1)
+    print("got full state")
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    frame_name = "iiwa_link_ee"
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+
+    # load offline controller
+    state_and_control = pickle.load(open(file_name + ".p","rb"))
+    pos_over_time = state_and_control["state"]
+    F_over_time = state_and_control["control"]
+    params = state_and_control["params"]
+
+    phi = np.pi/2
+    alpha = 0.05
+    idx = int(params[0])
+    T = int(params[idx+27])
+    r0 = params[3]
+    r = params[4]
+
+    # go to initial state
+    t = 0
+    x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
+    F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi0, omega = F_over_time[t,:]
+    x_centroid = x - r0*np.sin(theta)
+    y_centroid = y + r0*np.cos(theta)
+    x_F1 = x_centroid-d*np.cos(theta)
+    y_F1 = y_centroid-d*np.sin(theta)
+
+    # phi
+    frame_name = "iiwa_link_ee"
+    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        dphi = phi0 - phi 
+        dphi = min(dphi,np.pi/180.0*2.0)
+        dphi = max(dphi,-np.pi/180.0*2.0)
+        print "dphi=",dphi
+        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):        
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
+    # alpha    
+    dalpha = omega / 2.0 - alpha 
+    print "dalpha = ", dalpha
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        #print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+    new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
+    start_time = time.time()
+    while (time.time() - start_time < 1):
+        pub.publish(new_msg)
+        handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+        time.sleep(1)
+    alpha += dalpha
+    return
+
+def carrot_closed_loop():
+    #rospy.init_node('sandbox', anonymous=True)
+    tfBuffer = tf2_ros.Buffer()
+    listener = tf2_ros.TransformListener(tfBuffer)
+
+    rospy.wait_for_service("plan_runner/init_task_space_streaming")
+    sp = rospy.ServiceProxy('plan_runner/init_task_space_streaming',
+        robot_msgs.srv.StartStreamingPlan)
+    init = robot_msgs.srv.StartStreamingPlanRequest()
+    rospy.sleep(1)
+    #init.force_guard.append(make_force_guard_msg())
+    print sp(init)
+    pub = rospy.Publisher('plan_runner/task_space_streaming_setpoint',
+        robot_msgs.msg.CartesianGoalPoint, queue_size=1)
+    robotSubscriber = rosUtils.JointStateSubscriber("/joint_states")
+    print("Waiting for full kuka state...")
+    while len(robotSubscriber.joint_positions.keys()) < 3:
+        rospy.sleep(0.1)
+    print("got full state")
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    frame_name = "iiwa_link_ee"
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+
+    # load offline controller
+    state_and_control = pickle.load(open(file_name + ".p","rb"))
+    pos_over_time = state_and_control["state"]
+    F_over_time = state_and_control["control"]
+    params = state_and_control["params"]
+
+    phi = np.pi/2
+    alpha = 0.05
+    idx = int(params[0])
+    T = int(params[idx+27])
+    r0 = params[3]
+    r = params[4]
+
+    # go to initial state
+    t = 0
+    x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
+    F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi0, omega = F_over_time[t,:]
+    x_centroid = x - r0*np.sin(theta)
+    y_centroid = y + r0*np.cos(theta)
+    x_F1 = x_centroid-d*np.cos(theta)
+    y_F1 = y_centroid-d*np.sin(theta)
+
+    # phi
+    frame_name = "iiwa_link_ee"
+    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        dphi = phi0 - phi 
+        dphi = min(dphi,np.pi/180.0*2.0)
+        dphi = max(dphi,-np.pi/180.0*2.0)
+        print "dphi=",dphi
+        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):        
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
+    # alpha    
+    dalpha = omega / 2.0 - alpha 
+    print "dalpha = ", dalpha
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        #print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+    new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
+    start_time = time.time()
+    while (time.time() - start_time < 1):
+        pub.publish(new_msg)
+        handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+        time.sleep(1)
+    alpha += dalpha
+
+
+    # Finish initial pose. Start control...
+
+    # Load TVLQR
+    output = pickle.load(open(file_name + "_tvlqr_output.p","rb"))
+    K = output["K"]
+
+    rospy.sleep(10)
+    print("10 seconds left")
+    rospy.sleep(10)
+    print("5 seconds left")
+    rospy.sleep(5)
+    print("start...")
+    for t in range(1,T):
+        x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
+        F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi_next, omega = F_over_time[t,:]
+        x_centroid = x - r0*np.sin(theta)
+        y_centroid = y + r0*np.cos(theta)
+        x_F1_next = x_centroid-d*np.cos(theta)
+        y_F1_next = y_centroid-d*np.sin(theta)
+        dx = x_F1_next - x_F1
+        dy = y_F1_next - y_F1 
+        x_F1 = x_F1_next
+        y_F1 = y_F1_next
+
+        # compute current state from data
+        theta_cur, x_cur = data 
+        y_cur = r - r0*np.cos(theta)
+        state_cur = np.array([x_cur,y_cur,theta_cur,x_dot,y_dot,theta_dot,d])# velocities and d are ignored
+        state_nominal = np.array([x,y,theta,x_dot,y_dot,theta_dot,d])
+        state_div = state_cur - state_nominal
+        state_div = np.append(state_div,1)
+        u_div = K[:,:,t].dot(state_div)
+        phi_next = phi_next+u_div[-2]# v1 is ignored
+        omega = omega+u_div[-1]
+        # calculate difference in x axis (y in pose representation)
+        x_should = -r*theta_cur
+        x_diff = x_cur-x_should
+        dx += x_diff # should i change y as well?
+
+        #frame_name = "iiwa_link_ee"
+        # phi, dy
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        dphi = phi_next - phi 
+        dalpha = omega / 2.0 - alpha 
+
+        print "dphi=",dphi/np.pi * 180.0, "dalpha=",dalpha, "dx=",dx,"dy=",dy
+        # do while loop or do this?? 
+        dphi = min(dphi,np.pi/180.0*2.0)
+        dphi = max(dphi,-np.pi/180.0*2.0)
+        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha,[dx,dy])
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):        
+            pub.publish(new_msg)
+            time.sleep(0.1)
+        # alpha    
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
+        start_time = time.time()
+        while (time.time() - start_time < 1):
+            pub.publish(new_msg)
+            handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+            time.sleep(1)
+        alpha += dalpha
+
+    rospy.wait_for_service("plan_runner/stop_plan")
+    sp = rospy.ServiceProxy('plan_runner/stop_plan',
+        std_srvs.srv.Trigger)
+    init = std_srvs.srv.TriggerRequest()
+    print sp(init)
+
+def test_task_space_streaming():
+        #rospy.init_node('sandbox', anonymous=True)
+    tfBuffer = tf2_ros.Buffer()
+    listener = tf2_ros.TransformListener(tfBuffer)
+
+    rospy.wait_for_service("plan_runner/init_task_space_streaming")
+    sp = rospy.ServiceProxy('plan_runner/init_task_space_streaming',
+        robot_msgs.srv.StartStreamingPlan)
+    init = robot_msgs.srv.StartStreamingPlanRequest()
+    rospy.sleep(1)
+    #init.force_guard.append(make_force_guard_msg())
+    print sp(init)
+    pub = rospy.Publisher('plan_runner/task_space_streaming_setpoint',
+        robot_msgs.msg.CartesianGoalPoint, queue_size=1)
+    robotSubscriber = rosUtils.JointStateSubscriber("/joint_states")
+    print("Waiting for full kuka state...")
+    while len(robotSubscriber.joint_positions.keys()) < 3:
+        rospy.sleep(0.1)
+    print("got full state")
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    frame_name = "iiwa_link_ee"
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+
+    # load offline controller
+    state_and_control = pickle.load(open(file_name+".p","rb"))
+    pos_over_time = state_and_control["state"]
+    F_over_time = state_and_control["control"]
+    params = state_and_control["params"]
+
+    phi = np.pi/2
+    alpha = 0.05
+    idx = int(params[0])
+    T = int(params[idx+27])
+    r0 = params[3]
+
+    # fix initial state
+    omega = 2*(alpha-0.025)
+    handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+    time.sleep(1)
+    print "initial omega = ", omega 
+
+    frame_name = "iiwa_link_ee"
+    try:
+        current_pose_ee = rosUtils.poseFromROSTransformMsg(
+            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+        #print current_pose_ee
+    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        print("Troubling looking up tf...")
+        rate.sleep()
+    dphi = -2.0 /180*np.pi
+    print "dphi=",dphi
+    new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
+    start_time = time.time()
+    while (time.time() - start_time < 0.5):        
+        pub.publish(new_msg)
+        time.sleep(0.1)
+
+    rospy.wait_for_service("plan_runner/stop_plan")
+    sp = rospy.ServiceProxy('plan_runner/stop_plan',
+        std_srvs.srv.Trigger)
+    init = std_srvs.srv.TriggerRequest()
+    print sp(init)
+
 def grip_to_d(schunk_driver,d):
        schunk_driver.sendGripperCommand(d, force=80, speed=0.05)
 
 def pregrasp():
-    pos = [0.63, 0., 0.15]
+    pos = [0.63, 0., 0.165]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
+    # load offline controller
+    state_and_control = pickle.load(open(file_name + ".p","rb"))
+    F_over_time = state_and_control["control"]
+
+    phi = np.pi/2.0
+    phi_next = F_over_time[0,-2]
+    dphi = phi_next - phi  
+    print "phi=",phi,"phi_next=",phi_next,"dphi=",dphi
+    # rotate phi degrees counter-clockwise
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([1,0,0])
+    rot_theta = dphi
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    
     # # rotate -pi/4 degrees
     # mat = transformations.quaternion_matrix(quat)
     # mat = mat[:3,:3]
@@ -343,12 +800,11 @@ def right_finger_move(driver, d, force=80, speed=0.05):
     driver.sendGripperCommand(d, force=80, speed=0.05)
 
 
-data = [0.0,0.0]
 def carrot_pose_call_back(msg): 
     try:
         data[0] = msg.data[0]
         data[1] = msg.data[1]
-        print data[0], data[1]
+        #print data[0], data[1]
     except:
         print "no data"
         return
@@ -364,7 +820,6 @@ if __name__ == "__main__":
     print("Moving to start position")
 
     above_table_pre_grasp = [0.04486168762069299, 0.3256606458812486, -0.033502080520812445, -1.5769091802934694, 0.05899249087322813, 1.246379583616529, 0.38912999977004026]
-    #above_table_pre_grasp = [0.63, 0.0, 0.25, 0.71390524,  0.12793277,  0.67664775, -0.12696589]
     targetPosition = above_table_pre_grasp
 
     robotService = rosUtils.RobotService.makeKukaRobotService()
@@ -385,17 +840,16 @@ if __name__ == "__main__":
     rospy.sleep(1)
     handDriver.sendOpenGripperCommand()
     rospy.sleep(1)
-    # handDriver.sendGripperCommand(0.1, force=80, speed=0.05)
-    # rospy.sleep(3)
     i=0
-    for goal in [pregrasp()]:
+    for goal in [prepose_for_closed_loop()]:
         print "sending goal"
         client.send_goal(goal)
-        #handDriver.sendGripperCommand(0.06, force=80, speed=0.05)
+        #handDriver.sendGripperCommand(0.054, force=80, speed=0.05)
         rospy.loginfo("waiting for CartesianTrajectory action result")
         client.wait_for_result()
         result = client.get_result()
-    # handDriver.sendGripperCommand(0.02, force=80, speed=0.05)
-    # rospy.sleep(0.5)
-    test_task_space_streaming()
+    #carrot_closed_loop_initial_pose()
+    carrot_closed_loop()
+    #carrot_open_loop()
+    #test_task_space_streaming()
 
