@@ -68,7 +68,7 @@ class ARPoseEst():
 			if np.cross(y_axis_init,y_axis).dot(np.array([0,0,1])) > 0:
 				angle = -angle
 			print('degree = %.2f'%(angle/np.pi*180))
-			new_msg = std_msgs.msg.Float32MultiArray(data=[angle,pos_x])
+			new_msg = std_msgs.msg.Float32MultiArray(data=[angle, pos_x-self.pose[0]])
 			self.pub.publish(new_msg)
 
 		except:
