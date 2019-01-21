@@ -36,7 +36,7 @@ def tvlqr(A,B,Q,R,P0,T):
 	return K
 
 if __name__=="__main__":
-	file_name = "trajopt_example8_T100_phialwaysincreasing"
+	file_name = "trajopt_example9_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	F_over_time = state_and_control["control"]
@@ -65,6 +65,7 @@ if __name__=="__main__":
 	P0 = np.eye(n+1)
 	for t in range(t0,T):
 		v1 = F_over_time[t,4]
+		print(v1)
 		# if np.abs(v1) < 0.001:
 		# 	A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		# elif v1 > 0.001:

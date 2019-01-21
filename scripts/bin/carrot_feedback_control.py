@@ -35,7 +35,7 @@ import robot_msgs.srv
 
 
 data = [0.0,0.0]
-file_name = "trajopt_example8_T100_phialwaysincreasing"
+file_name = "trajopt_example9_latest"
 
 def make_cartesian_trajectory_goal_world_frame(pos, quat, duration):
 
@@ -213,6 +213,58 @@ def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.
 
     return new_msg, phi + dphi 
 
+def rotate_around_left_finger_tip2(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.16):
+    # rotate around left finger tip for dphi degrees
+    # pose_cur = [[trans],[quat]]: current pose
+    # phi: current degree of gripper
+    # dx: horizontal and vertical translation of the left finger tip
+    # alpha: distance between to fingers
+    # l: height between left finger tip and the ee frame origin 
+    L = np.sqrt(alpha**2 + l**2)
+    #print "L=",L
+    eta = np.arctan2(alpha,l)
+    eta2 = phi-eta 
+    eta2_new = eta2 + dphi
+    #print "eta = ", eta, "eta2 = ", eta2, "eta2_new = ", eta2_new, "dphi = ", dphi
+    dy = L*np.cos(eta2_new) - L*np.cos(eta2)
+    dz = L*np.sin(eta2_new) - L*np.sin(eta2)
+    #print dy,dz
+
+    trans, quat = pose_cur
+    trans_new = trans
+    trans_new[1] += dy + dx[0]
+    trans_new[2] += dz + dx[1]
+
+    # rotate phi degrees counter-clockwise
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([1,0,0])
+    rot_theta = dphi
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    
+    pose_new = [trans_new,quat.tolist()]
+
+
+    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    new_msg.xyz_point.header.frame_id = "base"
+    new_msg.xyz_point.point.x = pose_new[0][0]
+    new_msg.xyz_point.point.y = pose_new[0][1]
+    new_msg.xyz_point.point.z = pose_new[0][2]
+    new_msg.xyz_d_point.x = 0.
+    new_msg.xyz_d_point.y = 0.
+    new_msg.xyz_d_point.z = 0.0
+    new_msg.quaternion.w = pose_new[1][0]
+    new_msg.quaternion.x = pose_new[1][1]
+    new_msg.quaternion.y = pose_new[1][2]
+    new_msg.quaternion.z = pose_new[1][3]
+    new_msg.gain = make_cartesian_gains_msg(50,10)
+    new_msg.ee_frame_id = "iiwa_link_ee"
+
+    return new_msg, phi + dphi 
+
+
 def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,dalpha,dx=[0.0,0.0]):
     trans, quat = pose_cur
     trans_new = trans
@@ -379,7 +431,8 @@ def carrot_open_loop():
 
 
 def prepose_for_closed_loop():
-    pos = [0.63, 0., 0.164]
+    #pos = [0.63, 0., 0.164] # this is for example 8 trajectory
+    pos = [0.63, 0., 0.162]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
 
     # # load offline controller
@@ -470,26 +523,7 @@ def carrot_closed_loop_initial_pose():
     x_F1 = x_centroid-d*np.cos(theta)
     y_F1 = y_centroid-d*np.sin(theta)
 
-    # phi
     frame_name = "iiwa_link_ee"
-    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
-        try:
-            current_pose_ee = rosUtils.poseFromROSTransformMsg(
-                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            #print current_pose_ee
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print("Troubling looking up tf...")
-            rate.sleep()
-        dphi = phi0 - phi 
-        dphi = min(dphi,np.pi/180.0*2.0)
-        dphi = max(dphi,-np.pi/180.0*2.0)
-        print "dphi=",dphi
-        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
-        start_time = time.time()
-        while (time.time() - start_time < 0.5):        
-            pub.publish(new_msg)
-            time.sleep(0.1)
-
     # alpha    
     dalpha = omega / 2.0 - alpha 
     print "dalpha = ", dalpha
@@ -502,11 +536,31 @@ def carrot_closed_loop_initial_pose():
         rate.sleep()
     new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
     start_time = time.time()
-    while (time.time() - start_time < 1):
+    while (time.time() - start_time < 2):
         pub.publish(new_msg)
         handDriver.sendGripperCommand(omega, force=80, speed=0.05)
-        time.sleep(1)
+        time.sleep(.1)
     alpha += dalpha
+
+    # phi
+    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        dphi = phi0 - phi 
+        dphi = min(dphi,np.pi/180.0*2.0)
+        dphi = max(dphi,-np.pi/180.0*2.0)
+        print "dphi=",dphi
+        new_msg, phi = rotate_around_left_finger_tip2(current_pose_ee,dphi,phi,alpha)
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):        
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
     return
 
 def carrot_closed_loop():
@@ -561,26 +615,7 @@ def carrot_closed_loop():
     x_F1 = x_centroid-d*np.cos(theta)
     y_F1 = y_centroid-d*np.sin(theta)
 
-    # phi
     frame_name = "iiwa_link_ee"
-    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
-        try:
-            current_pose_ee = rosUtils.poseFromROSTransformMsg(
-                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            #print current_pose_ee
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print("Troubling looking up tf...")
-            rate.sleep()
-        dphi = phi0 - phi 
-        dphi = min(dphi,np.pi/180.0*2.0)
-        dphi = max(dphi,-np.pi/180.0*2.0)
-        print "dphi=",dphi
-        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha)
-        start_time = time.time()
-        while (time.time() - start_time < 0.5):        
-            pub.publish(new_msg)
-            time.sleep(0.1)
-
     # alpha    
     dalpha = omega / 2.0 - alpha 
     print "dalpha = ", dalpha
@@ -593,12 +628,30 @@ def carrot_closed_loop():
         rate.sleep()
     new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
     start_time = time.time()
-    while (time.time() - start_time < 1):
+    while (time.time() - start_time < 2):
         pub.publish(new_msg)
         handDriver.sendGripperCommand(omega, force=80, speed=0.05)
-        time.sleep(1)
+        time.sleep(.1)
     alpha += dalpha
 
+    # phi
+    while (np.abs(phi0-phi)>np.pi/180.0*0.1):
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            #print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+        dphi = phi0 - phi 
+        dphi = min(dphi,np.pi/180.0*2.0)
+        dphi = max(dphi,-np.pi/180.0*2.0)
+        print "dphi=",dphi
+        new_msg, phi = rotate_around_left_finger_tip2(current_pose_ee,dphi,phi,alpha)
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):        
+            pub.publish(new_msg)
+            time.sleep(0.1)
 
     # Finish initial pose. Start control...
 
@@ -606,7 +659,7 @@ def carrot_closed_loop():
     output = pickle.load(open(file_name + "_tvlqr_output.p","rb"))
     K = output["K"]
 
-    rospy.sleep(10)
+    rospy.sleep(20)
     print("10 seconds left")
     rospy.sleep(10)
     print("5 seconds left")
@@ -631,13 +684,15 @@ def carrot_closed_loop():
         state_nominal = np.array([x,y,theta,x_dot,y_dot,theta_dot,d])
         state_div = state_cur - state_nominal
         state_div = np.append(state_div,1)
-        u_div = K[:,:,t].dot(state_div)
-        phi_next = phi_next+u_div[-2]# v1 is ignored
-        omega = omega+u_div[-1]
-        # calculate difference in x axis (y in pose representation)
-        x_should = -r*theta_cur
-        x_diff = x_cur-x_should
-        dx += x_diff # should i change y as well?
+        # u_div = K[:,:,t].dot(state_div)
+        # phi_next = phi_next+u_div[-2]# v1 is ignored
+        # omega = omega+u_div[-1]
+
+
+        # # calculate difference in x axis (y in pose representation)
+        # x_should = -r*theta_cur
+        # x_diff = x_cur-x_should
+        # dx += x_diff # should i change y as well?
 
         #frame_name = "iiwa_link_ee"
         # phi, dy
@@ -651,11 +706,14 @@ def carrot_closed_loop():
         dphi = phi_next - phi 
         dalpha = omega / 2.0 - alpha 
 
-        print "dphi=",dphi/np.pi * 180.0, "dalpha=",dalpha, "dx=",dx,"dy=",dy
+        print "dphi=",dphi/np.pi * 180.0, "dalpha=",dalpha, "dx=",dx,"dy=",dy, "F1=",F1, "F2=",F2
         # do while loop or do this?? 
         dphi = min(dphi,np.pi/180.0*2.0)
         dphi = max(dphi,-np.pi/180.0*2.0)
-        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha,[dx,dy])
+        if dphi > 0:
+            new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha,[dx,dy])
+        else:
+            new_msg, phi = rotate_around_left_finger_tip2(current_pose_ee,dphi,phi,alpha,[dx,dy])
         start_time = time.time()
         while (time.time() - start_time < 0.5):        
             pub.publish(new_msg)

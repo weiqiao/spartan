@@ -14,10 +14,11 @@ import pickle
 # use two fingers to rotate carrot while considering friction between both fingers and carrot
 # two contact points can move
 # finger 1 initial and final contact points are the same 
-# different from example 7: phi is always increasing
+# different from example 8: add cost function
 
 DynamicsConstraintEps = 0.00001
 PositionConstraintEps = 0.01
+FingerWidth = 0.015
 mu_ground = 0.5 # frictional coefficient between ground and carrot
 mu_finger = 0.2 # frictional coefficient between finger and carrot
 g = 9.8
@@ -190,6 +191,15 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 				theta_prev = pos_over_time[t-1,2]
 				self.AddLinearConstraint(theta - theta_prev >= 0)
 
+
+			# the right finger does not touch the ground
+			y_centroid = y + DistanceCentroidToCoM*sym.cos(theta)
+			y_F1 = y_centroid-d*sym.sin(theta)
+			self.AddConstraint(y_F1 - (omega+FingerWidth)*sym.cos(phi) >= 0)
+
+			# add cost
+			self.AddLinearCost((phi-theta))
+
 		# initial state constraint
 		for i in range(n):
 			self.AddLinearConstraint(pos_over_time[0,i]==pos_init[i])
@@ -242,7 +252,7 @@ def visualize(X,F,t):
     draw_left_finger(ax1,X,F)
     draw_right_finger(ax1,X,F)
     t += 1
-    fig.savefig('trajopt_example8_fig_latest/carrot_%d.png'%t, dpi=100)
+    fig.savefig('trajopt_example9_fig_latest/carrot_%d.png'%t, dpi=100)
     plt.close()
     return fig
 
@@ -414,4 +424,4 @@ if __name__=="__main__":
 		params_save = np.append(params_save,pos_final)
 		params_save = np.append(params_save,[T])
 		state_and_control = {"state": pos_over_time, "control":F_over_time, "params": params_save}
-		pickle.dump( state_and_control, open("trajopt_example8_latest.p","wb"))
+		pickle.dump( state_and_control, open("trajopt_example9_latest.p","wb"))
