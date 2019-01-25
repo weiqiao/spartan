@@ -33,9 +33,12 @@ from spartan.manipulation.schunk_driver import SchunkDriver
 import robot_msgs.msg
 import robot_msgs.srv
 
+from trajopt.forward_dynamics import forward_dynamics
+
 
 data = [0.0,0.0]
-file_name = "trajopt_example11_latest"
+file_name = "trajopt_example9_latest"
+g = 9.8
 
 def make_cartesian_trajectory_goal_world_frame(pos, quat, duration):
 
@@ -162,50 +165,6 @@ def get_relative_tf_between_poses(pose_1, pose_2):
     tf_2 = tf_matrix_from_pose(pose_2)
     return np.linalg.inv(tf_1).dot(tf_2)
 
-def safety_check(pose_cur,phi,alpha,l=0.19):
-    safe = 1
-    if phi >= np.pi*3.0/4.0 or phi <= np.pi/4.0:
-        safe = 0
-        return safe 
-    z_max = pose_cur[0][2] + 0.04 # TODO
-    if phi <= np.pi/2:
-        z = alpha*np.cos(phi) + l*np.sin(phi)
-    else:
-        z = - alpha*np.cos(phi) + l*np.sin(phi)
-    if z >= z_max:
-        safe = 0
-    return safe 
-
-def translate_gripper_yz(pose_cur,dx=[0.0,0.0]):
-    trans, quat = pose_cur
-    trans_new = trans
-    dx_norm = np.sqrt(dx[0]*dx[0]+dx[1]*dx[1])
-    if dx_norm > 0.02:
-        dx[0] *= 0.02/dx_norm
-        dx[1] *= 0.02/dx_norm
-    trans_new[1] += dx[0]
-    trans_new[2] += dx[1]
-
-    pose_new = [trans_new,quat]
-
-
-    new_msg = robot_msgs.msg.CartesianGoalPoint()
-    new_msg.xyz_point.header.frame_id = "base"
-    new_msg.xyz_point.point.x = pose_new[0][0]
-    new_msg.xyz_point.point.y = pose_new[0][1]
-    new_msg.xyz_point.point.z = pose_new[0][2]
-    new_msg.xyz_d_point.x = 0.
-    new_msg.xyz_d_point.y = 0.
-    new_msg.xyz_d_point.z = 0.0
-    new_msg.quaternion.w = pose_new[1][0]
-    new_msg.quaternion.x = pose_new[1][1]
-    new_msg.quaternion.y = pose_new[1][2]
-    new_msg.quaternion.z = pose_new[1][3]
-    new_msg.gain = make_cartesian_gains_msg(50,10)
-    new_msg.ee_frame_id = "iiwa_link_ee"
-
-    return new_msg
-
 def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.19):
     # rotate around left finger tip for dphi degrees
     # pose_cur = [[trans],[quat]]: current pose
@@ -307,6 +266,7 @@ def rotate_around_left_finger_tip2(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0
     new_msg.ee_frame_id = "iiwa_link_ee"
 
     return new_msg, phi + dphi 
+
 
 def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,dalpha,dx=[0.0,0.0]):
     trans, quat = pose_cur
@@ -699,15 +659,16 @@ def carrot_closed_loop():
     # Finish initial pose. Start control...
 
     # Load TVLQR
-    # output = pickle.load(open(file_name + "_tvlqr_output.p","rb"))
-    # K = output["K"]
+    output = pickle.load(open(file_name + "_tvlqr_output.p","rb"))
+    K = output["K"]
 
-    rospy.sleep(20)
-    print("10 seconds left")
-    rospy.sleep(10)
-    print("5 seconds left")
-    rospy.sleep(5)
+    #rospy.sleep(20)
+    #print("10 seconds left")
+    #rospy.sleep(10)
+    print("1 seconds left")
+    rospy.sleep(1)
     print("start...")
+    global data 
     for t in range(1,T):
         x,y,theta,x_dot,y_dot,theta_dot,d = pos_over_time[t,:]
         F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi_next, omega = F_over_time[t,:]
@@ -727,10 +688,11 @@ def carrot_closed_loop():
         state_nominal = np.array([x,y,theta,x_dot,y_dot,theta_dot,d])
         state_div = state_cur - state_nominal
         state_div = np.append(state_div,1)
-        # u_div = K[:,:,t].dot(state_div)
-        # phi_next = phi_next+u_div[-2]# v1 is ignored
-        # omega = omega+u_div[-1]
-
+        u_div = K[:,:,t].dot(state_div)
+        phi_next = phi_next+u_div[-2]# v1 is ignored
+        omega = omega+u_div[-1]
+        state_next = forward_dynamics(state_cur,u_div + F_over_time[t,:], params)
+        data = [state_next[2],state_next[0]]
 
         # # calculate difference in x axis (y in pose representation)
         # x_should = -r*theta_cur
@@ -742,7 +704,7 @@ def carrot_closed_loop():
         try:
             current_pose_ee = rosUtils.poseFromROSTransformMsg(
                 tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            print current_pose_ee
+            #print current_pose_ee
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Troubling looking up tf...")
             rate.sleep()
@@ -776,55 +738,6 @@ def carrot_closed_loop():
             handDriver.sendGripperCommand(omega, force=80, speed=0.05)
             time.sleep(1)
         alpha += dalpha
-
-    # hand-designed gripper final motion
-    # gripper phi
-    for ttt in range(30):
-        try:
-            current_pose_ee = rosUtils.poseFromROSTransformMsg(
-                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            print current_pose_ee
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print("Troubling looking up tf...")
-            rate.sleep()
-
-        dphi = np.pi*1/180
-        new_msg, phi = rotate_around_left_finger_tip(current_pose_ee,dphi,phi,alpha,[0,0])
-        start_time = time.time()
-        while (time.time() - start_time < 0.5):        
-            pub.publish(new_msg)
-            time.sleep(0.1)
-    # gripper omega
-    try:
-        current_pose_ee = rosUtils.poseFromROSTransformMsg(
-            tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-        #print current_pose_ee
-    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print("Troubling looking up tf...")
-        rate.sleep()
-    dalpha = 0.01
-    new_msg = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
-    start_time = time.time()
-    while (time.time() - start_time < 1):
-        pub.publish(new_msg)
-        time.sleep(1)
-    handDriver.sendGripperCommand(2*(alpha+dalpha), force=80, speed=0.05)
-    alpha += dalpha
-    # gripper translation
-    for ttt in range(5):
-        try:
-            current_pose_ee = rosUtils.poseFromROSTransformMsg(
-                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            #print current_pose_ee
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print("Troubling looking up tf...")
-            rate.sleep()
-        dx = [-0.01,0.01]
-        new_msg = translate_gripper_yz(current_pose_ee,dx)
-        start_time = time.time()
-        while (time.time() - start_time < 1):
-            pub.publish(new_msg)
-            time.sleep(1)
 
     rospy.wait_for_service("plan_runner/stop_plan")
     sp = rospy.ServiceProxy('plan_runner/stop_plan',
@@ -959,11 +872,10 @@ def carrot_pose_call_back(msg):
         print "no data"
         return
 
-
 if __name__ == "__main__":
     rospy.init_node('sandboxx')
     
-    rospy.Subscriber('carrot_pose_pub', std_msgs.msg.Float32MultiArray, carrot_pose_call_back)
+    #rospy.Subscriber('carrot_pose_pub', std_msgs.msg.Float32MultiArray, carrot_pose_call_back)
 
     robotSubscriber = JointStateSubscriber("/joint_states")
     rospy.sleep(1.0)

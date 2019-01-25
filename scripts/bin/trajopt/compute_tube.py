@@ -17,7 +17,7 @@ import pickle
 
 SAVE_OUTPUT = 1
 if __name__=="__main__":
-	file_name = "example_8sol_T200_nolowerboundondphi"
+	file_name = "trajopt_example9_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	F_over_time = state_and_control["control"]

@@ -158,7 +158,7 @@ def get_relative_tf_between_poses(pose_1, pose_2):
     tf_2 = tf_matrix_from_pose(pose_2)
     return np.linalg.inv(tf_1).dot(tf_2)
 
-def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.055,dx=[0.0,0.0],l=0.19):
+def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.19):
     # rotate around left finger tip for dphi degrees
     # pose_cur = [[trans],[quat]]: current pose
     # phi: current degree of gripper
@@ -191,12 +191,62 @@ def rotate_around_left_finger_tip(pose_cur,dphi,phi,alpha=0.055,dx=[0.0,0.0],l=0
     
     pose_new = [trans_new,quat.tolist()]
     return pose_new
+def rotate_around_left_finger_tip2(pose_cur,dphi,phi,alpha=0.05,dx=[0.0,0.0],l=0.16):
+    # rotate around left finger tip for dphi degrees
+    # pose_cur = [[trans],[quat]]: current pose
+    # phi: current degree of gripper
+    # dx: horizontal and vertical translation of the left finger tip
+    # alpha: distance between to fingers
+    # l: height between left finger tip and the ee frame origin 
+    L = np.sqrt(alpha**2 + l**2)
+    #print "L=",L
+    eta = np.arctan2(alpha,l)
+    eta2 = phi-eta 
+    eta2_new = eta2 + dphi
+    #print "eta = ", eta, "eta2 = ", eta2, "eta2_new = ", eta2_new, "dphi = ", dphi
+    dy = L*np.cos(eta2_new) - L*np.cos(eta2)
+    dz = L*np.sin(eta2_new) - L*np.sin(eta2)
+    #print dy,dz
 
-def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,dalpha,dx=[0.0,0.0],l=0.19):
     trans, quat = pose_cur
     trans_new = trans
-    dy = -dalpha*np.sin(phi)
-    dz = dalpha*np.cos(phi)
+    trans_new[1] += dy + dx[0]
+    trans_new[2] += dz + dx[1]
+
+    # rotate phi degrees counter-clockwise
+    mat = transformations.quaternion_matrix(quat)
+    mat = mat[:3,:3]
+    rot_axis = np.array([1,0,0])
+    rot_theta = dphi
+    rot_mat = tf_util.axis_angle_to_rotation_matrix(rot_axis, rot_theta)
+    mat = rot_mat.dot(mat)
+    quat = transformations.quaternion_from_matrix(mat)
+    
+    pose_new = [trans_new,quat.tolist()]
+
+
+    # new_msg = robot_msgs.msg.CartesianGoalPoint()
+    # new_msg.xyz_point.header.frame_id = "base"
+    # new_msg.xyz_point.point.x = pose_new[0][0]
+    # new_msg.xyz_point.point.y = pose_new[0][1]
+    # new_msg.xyz_point.point.z = pose_new[0][2]
+    # new_msg.xyz_d_point.x = 0.
+    # new_msg.xyz_d_point.y = 0.
+    # new_msg.xyz_d_point.z = 0.0
+    # new_msg.quaternion.w = pose_new[1][0]
+    # new_msg.quaternion.x = pose_new[1][1]
+    # new_msg.quaternion.y = pose_new[1][2]
+    # new_msg.quaternion.z = pose_new[1][3]
+    # new_msg.gain = make_cartesian_gains_msg(50,10)
+    # new_msg.ee_frame_id = "iiwa_link_ee"
+
+    return pose_new, phi + dphi 
+
+def change_finger_distance_while_keeping_left_finger_tip_unmoved(pose_cur,phi,dalpha,dx=[0.0,0.0]):
+    trans, quat = pose_cur
+    trans_new = trans
+    dy = dalpha*np.sin(phi)
+    dz = -dalpha*np.cos(phi)
     trans_new[1] += dy + dx[0]
     trans_new[2] += dz + dx[1]
 
@@ -232,64 +282,113 @@ def test_task_space_streaming():
         print("Troubling looking up tf...")
         rate.sleep()
 
-    alpha = 0.055
-    phi = np.pi/2
-    dalpha = 0.01
-    pose_new = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
-    print pose_new 
-    start_time = time.time()
-    while (time.time() - start_time < 0.5):
-        new_msg.xyz_point.header.frame_id = "base"
-        new_msg.xyz_point.point.x = pose_new[0][0]
-        new_msg.xyz_point.point.y = pose_new[0][1]
-        new_msg.xyz_point.point.z = pose_new[0][2]
-        new_msg.xyz_d_point.x = 0.
-        new_msg.xyz_d_point.y = 0.
-        new_msg.xyz_d_point.z = 0.0
-        new_msg.quaternion.w = pose_new[1][0]
-        new_msg.quaternion.x = pose_new[1][1]
-        new_msg.quaternion.y = pose_new[1][2]
-        new_msg.quaternion.z = pose_new[1][3]
-        new_msg.gain = make_cartesian_gains_msg(50,10)
-        new_msg.ee_frame_id = "iiwa_link_ee"
     
-        pub.publish(new_msg)
-        handDriver.sendGripperCommand(2*(alpha-dalpha), force=80, speed=0.05)
-        time.sleep(0.1)
+    phi = np.pi/2
 
-    # for ttt in range(30):
-    #     new_msg = robot_msgs.msg.CartesianGoalPoint()
-    #     frame_name = "iiwa_link_ee"
-    #     try:
-    #         current_pose_ee = rosUtils.poseFromROSTransformMsg(
-    #             tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-    #         print current_pose_ee
-    #     except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-    #         print("Troubling looking up tf...")
-    #         rate.sleep()
+    for ttt in range(30):
+        new_msg = robot_msgs.msg.CartesianGoalPoint()
+        frame_name = "iiwa_link_ee"
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
 
-    #     phi = np.pi/2
-    #     dphi = np.pi*1/180
-    #     pose_new = rotate_around_left_finger_tip(current_pose_ee,dphi,phi)
-    #     print pose_new 
-    #     start_time = time.time()
-    #     while (time.time() - start_time < 0.5):
-    #         new_msg.xyz_point.header.frame_id = "base"
-    #         new_msg.xyz_point.point.x = pose_new[0][0]
-    #         new_msg.xyz_point.point.y = pose_new[0][1]
-    #         new_msg.xyz_point.point.z = pose_new[0][2]
-    #         new_msg.xyz_d_point.x = 0.
-    #         new_msg.xyz_d_point.y = 0.
-    #         new_msg.xyz_d_point.z = 0.0
-    #         new_msg.quaternion.w = pose_new[1][0]
-    #         new_msg.quaternion.x = pose_new[1][1]
-    #         new_msg.quaternion.y = pose_new[1][2]
-    #         new_msg.quaternion.z = pose_new[1][3]
-    #         new_msg.gain = make_cartesian_gains_msg(50,10)
-    #         new_msg.ee_frame_id = "iiwa_link_ee"
+        dphi = -np.pi*1/180
+        pose_new,phi = rotate_around_left_finger_tip2(current_pose_ee,dphi,phi)
+        print pose_new 
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):
+            new_msg.xyz_point.header.frame_id = "base"
+            new_msg.xyz_point.point.x = pose_new[0][0]
+            new_msg.xyz_point.point.y = pose_new[0][1]
+            new_msg.xyz_point.point.z = pose_new[0][2]
+            new_msg.xyz_d_point.x = 0.
+            new_msg.xyz_d_point.y = 0.
+            new_msg.xyz_d_point.z = 0.0
+            new_msg.quaternion.w = pose_new[1][0]
+            new_msg.quaternion.x = pose_new[1][1]
+            new_msg.quaternion.y = pose_new[1][2]
+            new_msg.quaternion.z = pose_new[1][3]
+            new_msg.gain = make_cartesian_gains_msg(50,10)
+            new_msg.ee_frame_id = "iiwa_link_ee"
         
-    #         pub.publish(new_msg)
-    #         time.sleep(0.1)
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
+    for ttt in range(60):
+        new_msg = robot_msgs.msg.CartesianGoalPoint()
+        frame_name = "iiwa_link_ee"
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+
+        dphi = np.pi*1/180
+        pose_new = rotate_around_left_finger_tip(current_pose_ee,dphi,phi)
+        phi += dphi
+        print pose_new 
+        start_time = time.time()
+        while (time.time() - start_time < 0.5):
+            new_msg.xyz_point.header.frame_id = "base"
+            new_msg.xyz_point.point.x = pose_new[0][0]
+            new_msg.xyz_point.point.y = pose_new[0][1]
+            new_msg.xyz_point.point.z = pose_new[0][2]
+            new_msg.xyz_d_point.x = 0.
+            new_msg.xyz_d_point.y = 0.
+            new_msg.xyz_d_point.z = 0.0
+            new_msg.quaternion.w = pose_new[1][0]
+            new_msg.quaternion.x = pose_new[1][1]
+            new_msg.quaternion.y = pose_new[1][2]
+            new_msg.quaternion.z = pose_new[1][3]
+            new_msg.gain = make_cartesian_gains_msg(50,10)
+            new_msg.ee_frame_id = "iiwa_link_ee"
+        
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
+    alpha = 0.05
+    for ttt in range(4):
+        new_msg = robot_msgs.msg.CartesianGoalPoint()
+        frame_name = "iiwa_link_ee"
+        try:
+            current_pose_ee = rosUtils.poseFromROSTransformMsg(
+                tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
+            print current_pose_ee
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print("Troubling looking up tf...")
+            rate.sleep()
+
+        dalpha = -0.01
+        pose_new = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
+        print pose_new 
+        start_time = time.time()
+        while (time.time() - start_time < 1):
+            new_msg.xyz_point.header.frame_id = "base"
+            new_msg.xyz_point.point.x = pose_new[0][0]
+            new_msg.xyz_point.point.y = pose_new[0][1]
+            new_msg.xyz_point.point.z = pose_new[0][2]
+            new_msg.xyz_d_point.x = 0.
+            new_msg.xyz_d_point.y = 0.
+            new_msg.xyz_d_point.z = 0.0
+            new_msg.quaternion.w = pose_new[1][0]
+            new_msg.quaternion.x = pose_new[1][1]
+            new_msg.quaternion.y = pose_new[1][2]
+            new_msg.quaternion.z = pose_new[1][3]
+            new_msg.gain = make_cartesian_gains_msg(50,10)
+            new_msg.ee_frame_id = "iiwa_link_ee"
+        
+            pub.publish(new_msg)
+            handDriver.sendGripperCommand(2*(alpha+dalpha), force=80, speed=0.05)
+            alpha += dalpha
+            time.sleep(1)
+
+
     rospy.wait_for_service("plan_runner/stop_plan")
     sp = rospy.ServiceProxy('plan_runner/stop_plan',
         std_srvs.srv.Trigger)
@@ -300,7 +399,7 @@ def grip_to_d(schunk_driver,d):
        schunk_driver.sendGripperCommand(d, force=80, speed=0.05)
 
 def pregrasp():
-    pos = [0.63, 0., 0.15]
+    pos = [0.63, 0., 0.18]
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     # # rotate -pi/4 degrees
     # mat = transformations.quaternion_matrix(quat)
@@ -368,7 +467,7 @@ if __name__ == "__main__":
         rospy.loginfo("waiting for CartesianTrajectory action result")
         client.wait_for_result()
         result = client.get_result()
-    #handDriver.sendOpenGripperCommand()
-    #rospy.sleep(3)
+    # handDriver.sendGripperCommand(0.02, force=80, speed=0.05)
+    # rospy.sleep(0.5)
     test_task_space_streaming()
 
