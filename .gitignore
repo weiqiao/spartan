@@ -8,4 +8,4 @@
 /sandbox
 /calibration_data
 *snopt.out
-
+*.idea*
