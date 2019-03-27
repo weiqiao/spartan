@@ -465,7 +465,8 @@ def prepose_for_closed_loop():
 
 
     #pos = [0.63, 0., 0.17] # added a bench: pass safety check -- traj 11 open loop works (with red cutting board)
-    pos = [0.63, 0., 0.18] # added a bench: pass safety check -- traj 11 open loop works (with red cutting board)
+    # pos = [0.63, 0., 0.18] # added a bench: pass safety check -- traj 11 open loop works (with red cutting board)
+    pos = [0.63, 0., 0.182] # 03/16/19
     quat = [ 0.71390524,  0.12793277,  0.67664775, -0.12696589] # straight down position
     
     # # rotate -pi/4 degrees
@@ -482,8 +483,8 @@ def prepose_for_closed_loop():
         pos,
         quat,
         duration = 5.)
-    goal.gains.append(make_cartesian_gains_msg(50., 10.))
-    goal.force_guard.append(make_force_guard_msg(15.))
+    goal.gains.append(make_cartesian_gains_msg(50.,10.))
+    goal.force_guard.append(make_force_guard_msg(30.))
     return goal
 
 def postpose_for_closed_loop():
@@ -515,7 +516,7 @@ def postpose_for_closed_loop():
         quat,
         duration = 5.)
     goal.gains.append(make_cartesian_gains_msg(50., 10.))
-    goal.force_guard.append(make_force_guard_msg(15.))
+    goal.force_guard.append(make_force_guard_msg(30.))
     return goal
 
 def postpose_for_closed_loop2():
@@ -546,10 +547,12 @@ def postpose_for_closed_loop2():
         quat,
         duration = 5.)
     goal.gains.append(make_cartesian_gains_msg(50., 10.))
-    goal.force_guard.append(make_force_guard_msg(15.))
+    goal.force_guard.append(make_force_guard_msg(30.))
     return goal
 
 def carrot_closed_loop_initial_pose():
+    # no disturbances at all
+    #rospy.init_node('sandbox', anonymous=True)
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
 
@@ -566,7 +569,7 @@ def carrot_closed_loop_initial_pose():
         rospy.sleep(0.1)
     print("got full state")
 
-    new_msg = robot_msgs.msg.CartesianGoalPoint()
+    # new_msg = robot_msgs.msg.CartesianGoalPoint()
     frame_name = "iiwa_link_ee"
     try:
         current_pose_ee = rosUtils.poseFromROSTransformMsg(tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
@@ -587,7 +590,7 @@ def carrot_closed_loop_initial_pose():
     T = int(params[idx+27])
     r0 = params[3]
     r = params[4]
-    omega_offset = 0.008
+    omega_offset = 0.008 # from experiment. previously was 0.008
 
     # go to initial state
     t = 0
@@ -598,26 +601,26 @@ def carrot_closed_loop_initial_pose():
     x_F1 = x_centroid-d*np.cos(theta)
     y_F1 = y_centroid-d*np.sin(theta)
 
-    frame_name = "iiwa_link_ee"
+    # frame_name = "iiwa_link_ee"
     # alpha    
     omega += omega_offset
     dalpha = omega / 2.0 - alpha 
     print "dalpha = ", dalpha
-    try:
-        current_pose_ee = rosUtils.poseFromROSTransformMsg(tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-        #print current_pose_ee
-    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-        print("Troubling looking up tf...")
-        rate.sleep()
     new_msg, pose_new = change_finger_distance_while_keeping_left_finger_tip_unmoved(current_pose_ee,phi,dalpha)
     safe1 = safety_check(pose_new,phi,alpha)
     safe2 = safety_check(pose_new,phi,alpha+dalpha)
     if safe1 and safe2:
         start_time = time.time()
-        while (time.time() - start_time < 2):
+        while (time.time() - start_time < 0.5):
             pub.publish(new_msg)
             handDriver.sendGripperCommand(omega, force=80, speed=0.05)
             time.sleep(.1)
+
+        # try faster commands
+        # pub.publish(new_msg)
+        # handDriver.sendGripperCommand(omega, force=80, speed=0.05)
+        # time.sleep(2)
+
         alpha += dalpha
     else:
         print("unsafe initial alpha",safe1,safe2)
@@ -630,12 +633,7 @@ def carrot_closed_loop_initial_pose():
 
     # phi
     while (np.abs(phi0-phi)>np.pi/180.0*0.1):
-        try:
-            current_pose_ee = rosUtils.poseFromROSTransformMsg(tfBuffer.lookup_transform("base", frame_name, rospy.Time()).transform)
-            #print current_pose_ee
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            print("Troubling looking up tf...")
-            rate.sleep()
+        current_pose_ee = pose_new 
         dphi = phi0 - phi 
         dphi = min(dphi,np.pi/180.0*2.0)
         dphi = max(dphi,-np.pi/180.0*2.0)
@@ -644,9 +642,14 @@ def carrot_closed_loop_initial_pose():
         safe = safety_check(pose_new,phi,alpha)
         if safe:
             start_time = time.time()
-            while (time.time() - start_time < 0.5):        
-                pub.publish(new_msg)
-                time.sleep(0.1)
+            # while (time.time() - start_time < 0.5):        
+            #     pub.publish(new_msg)
+            #     time.sleep(0.1)
+
+            # try faster commands
+            pub.publish(new_msg)
+            time.sleep(0.1)
+
         else:
             print("unsafe initial phi",safe)
             phi -= dphi 
@@ -658,7 +661,6 @@ def carrot_closed_loop_initial_pose():
             return 
 
 def carrot_closed_loop():
-    #rospy.init_node('sandbox', anonymous=True)
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)
 
@@ -876,7 +878,6 @@ def carrot_closed_loop():
     init = std_srvs.srv.TriggerRequest()
     print sp(init)
 
-
 def carrot_closed_loop_simulation1():
     # no disturbances at all
     #rospy.init_node('sandbox', anonymous=True)
@@ -991,12 +992,12 @@ def carrot_closed_loop_simulation1():
     rospy.sleep(0.5)
     # Finish initial pose. Start control...
 
-    # rospy.sleep(20)
-    # print("10 seconds left")
-    # rospy.sleep(10)
-    # print("5 seconds left")
-    # rospy.sleep(5)
-    # print("start...")
+    rospy.sleep(20)
+    print("10 seconds left")
+    rospy.sleep(10)
+    print("5 seconds left")
+    rospy.sleep(5)
+    print("start...")
 
     gripper_state = [x_F1,y_F1,phi,alpha]
     dx_cur = 0 # if the initial state is perturbed this is not the case
@@ -1300,7 +1301,7 @@ def carrot_closed_loop_simulation2():
             if d_min > 0:
                 print("d_min>0")
                 # outside nearest polytope, need solve QP
-                idx_min -= 1 # the child of the node
+                idx_min += 1 # the child of the node
                 cur_linear_cell = polytube_controller_list_of_cells[idx_min] # linear_cell(A,B,c,polytope(H,h))
                 
                 # solver = GurobiSolver()
@@ -1475,7 +1476,7 @@ def carrot_pose_call_back(msg):
         return
 
 SIMULATION = 1
-
+# carrot_closed_loop_simulation1 can be used for open loop control
 if __name__ == "__main__":
     rospy.init_node('sandboxx')
     
@@ -1523,30 +1524,32 @@ if __name__ == "__main__":
         result = client.get_result()
     # carrot_closed_loop_initial_pose()
 
-    if not SIMULATION:
-        carrot_closed_loop()
-    else:
-        carrot_closed_loop_simulation1()
-        #carrot_closed_loop_simulation2()
-    
-    ### this part is to grab the carrot
-    # rospy.sleep(3)
-    # handDriver.sendGripperCommand(0.042, force=80, speed=0.05)
-    # rospy.sleep(1)
+    RUN_FULL_EXP = 0
+    if RUN_FULL_EXP:
+        if not SIMULATION:
+            carrot_closed_loop()
+        else:
+            carrot_closed_loop_simulation1()
+            #carrot_closed_loop_simulation2()
+        
+        ### this part is to grab the carrot
+        # rospy.sleep(3)
+        # handDriver.sendGripperCommand(0.042, force=80, speed=0.05)
+        # rospy.sleep(1)
 
-    ### final movement to flip the carrot another 90 degrees
-    FINAL_MOVEMENT = 1
-    if FINAL_MOVEMENT:
-        i = 0
-        for goal in [postpose_for_closed_loop(),
-                        postpose_for_closed_loop2()]:
-            print "sending goal"
-            client.send_goal(goal)
-            rospy.loginfo("waiting for CartesianTrajectory action result")
-            client.wait_for_result()
-            result = client.get_result()
-            if i==0:
-                i+=1
-                handDriver.sendGripperCommand(0.075, force=80, speed=0.05)
+        ### final movement to flip the carrot another 90 degrees
+        FINAL_MOVEMENT = 1
+        if FINAL_MOVEMENT:
+            i = 0
+            for goal in [postpose_for_closed_loop(),
+                            postpose_for_closed_loop2()]:
+                print "sending goal"
+                client.send_goal(goal)
+                rospy.loginfo("waiting for CartesianTrajectory action result")
+                client.wait_for_result()
+                result = client.get_result()
+                if i==0:
+                    i+=1
+                    handDriver.sendGripperCommand(0.075, force=80, speed=0.05)
 
 

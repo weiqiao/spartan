@@ -13,7 +13,7 @@ import pickle
 from trajopt.forward_dynamics import forward_dynamics
 
 
-
+# this is to simulate the system forward, but the integration error is too large
 g = 9.8
 
 """

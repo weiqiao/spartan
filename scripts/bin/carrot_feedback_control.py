@@ -512,9 +512,6 @@ def prepose_for_closed_loop():
     goal.force_guard.append(make_force_guard_msg(15.))
     return goal
 
-
-    return 
-
 def carrot_closed_loop_initial_pose():
     tfBuffer = tf2_ros.Buffer()
     listener = tf2_ros.TransformListener(tfBuffer)

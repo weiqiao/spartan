@@ -17,7 +17,7 @@ import pickle
 
 SAVE_OUTPUT = 1
 if __name__=="__main__":
-	file_name = "trajopt_example9_latest"
+	file_name = "trajopt_example11_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	F_over_time = state_and_control["control"]
@@ -35,40 +35,15 @@ if __name__=="__main__":
 	idx = int(params[0])
 	T = int(params[idx+27])
 	t0 = int(T/4*2)
-	list_of_cells = []
+	#t0 = 0
+	list_of_cells2 = []
 	for t in range(t0,T):
 		v1 = F_over_time[t,4]
-		# if np.abs(v1) < 0.001:
-		# 	A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		# elif v1 > 0.001:
-		# 	A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		# else:
-		# 	A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		if v1 > 0:
 			A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		else:
 			A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		list_of_cells.append(linear_cell(A,B,c,polytope(H,h)))
-		# A1,B1,c1,H1,h1 = calin1.linearize(pos_over_time[0,:], F_over_time[0,:], params)
-		# A2,B2,c2,H2,h2 = calin2.linearize(pos_over_time[0,:], F_over_time[0,:], params)
-		# A3,B3,c3,H3,h3 = calin3.linearize(pos_over_time[0,:], F_over_time[0,:], params)
-		# sys = system()
-		# sys.A[0,0] = A1
-		# sys.B[0,0] = B1
-		# sys.c[0,0] = c1
-		# sys.C[0,0] = polytope(H1,h1)
-
-		# sys.A[0,1] = A2
-		# sys.B[0,1] = B2
-		# sys.c[0,1] = c2
-		# sys.C[0,1] = polytope(H2,h2)
-
-		# sys.A[0,2] = A3
-		# sys.B[0,2] = B3
-		# sys.c[0,2] = c3
-		# sys.C[0,2] = polytope(H3,h3)
-
-		# sys.build_cells()
+		list_of_cells2.append(linear_cell(A,B,c,polytope(H,h)))
 		
 	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
@@ -77,8 +52,41 @@ if __name__=="__main__":
 	epsilon = 0.01
 	goal=zonotope(pos_final.reshape(-1,1),np.eye(n)*epsilon)
 
-	(x,u,G,theta)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells,goal,eps=1,order=1)
+	(x2,u2,G2,theta2)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells2,goal,eps=1,order=1)
+
+
+
+	list_of_cells1 = []
+	for t in range(t0):
+		v1 = F_over_time[t,4]
+		if v1 > 0:
+			A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		else:
+			A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		list_of_cells1.append(linear_cell(A,B,c,polytope(H,h)))
+
+	pos_init = pos_over_time[0,:]
+	x0 = pos_init.reshape((-1,1))
+	pos_final = pos_over_time[t0,:]
+	goal=zonotope(pos_final.reshape(-1,1),G2[0])
+	(x1,u1,G1,theta1)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells1,goal,eps=1,order=1)
+
+	x1.pop()
+	G1.pop()
+	x = x1 + x2
+	u = u1 + u2
+	G = G1 + G2 
+	theta = theta1 + theta2
+	list_of_cells = list_of_cells1 + list_of_cells2
+
+	epsilon2 = 0.001
+	g_add = epsilon2 * np.identity(n)
+	G_inv = []
+	for g0 in G:
+		g0 += g_add
+		G_inv.append(np.linalg.inv(g0))
+
 
 	if SAVE_OUTPUT:
-		output = {"x": x, "u":u, "G": G, "theta": theta}
+		output = {"x": x, "u":u, "G": G, "theta": theta, "G_inv":G_inv, "list_of_cells":list_of_cells}
 		pickle.dump( output, open(file_name+"_tube_output.p","wb"))
