@@ -11,6 +11,7 @@ import pickle
 import scipy
 from scipy.linalg import block_diag
 from scipy import optimize
+from scipy.optimize import linprog
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
@@ -57,9 +58,71 @@ def display_data():
     		print_pos_data(output2[ttt,:])    	
 
 
-def get_back_controller(cur_linear_cell,x,x_ref,G_inv):
+def get_back_controller(cur_linear_cell,x,x2,x_ref,G_inv):
+    # solve LP using scipy.optimize.linprog
     # cur_linear_cell: current linear cell
     # x: current state
+    # x2: [current phi, current alpha]
+    # f(x,u) + delta = Ax+Bu+c+delta is in x_ref + G*P
+    A = cur_linear_cell.A 
+    B = cur_linear_cell.B
+    c = cur_linear_cell.c 
+    p = cur_linear_cell.p
+    H = p.H
+    h = p.h 
+    n = len(x)
+    m = int(B.shape[1])
+
+    # u = t[:m], delta = t[m:] = t[m:m+n]
+
+    A_ub1 = np.hstack((G_inv.dot(B),G_inv))
+    b_ub1 = (1+EPS-G_inv.dot(A.dot(x) + c - x_ref))[:,0]
+
+    print("constraint 1", A_ub1.shape, b_ub1.shape)
+
+    A_ub2 = - np.hstack((G_inv.dot(B),G_inv))
+    b_ub2 = (1+EPS+G_inv.dot(A.dot(x) + c - x_ref))[:,0]
+
+    print("constraint 2", A_ub2.shape, b_ub2.shape)
+
+    num_constraints = H.shape[0]
+    A_ub3 = np.zeros((num_constraints,n+m))
+    A_ub3[:,:m] = H[:,n:]
+    b_ub3 = (-H[:,:n].dot(x) + h + EPS)[:,0]
+
+    print("constraint 3", A_ub3.shape, b_ub3.shape)
+
+    phi_tol = np.pi/180.0*0.5 # |phi-phi0| <= phi_tol, phi = t[m-2]
+    alpha_tol = 0.0005 #|alpha-alpha0| <= alpha_tol, alpha = t[m-1]
+    x2[1] *= 2
+    A_ub4 = np.zeros((4,n+m))
+    A_ub4[0,m-2] = -1
+    A_ub4[1,m-2] = 1
+    A_ub4[2,m-1] = -1
+    A_ub4[3,m-1] = 1
+    b_ub4 = np.zeros(4)
+    b_ub4[0] = -x2[0]+phi_tol+EPS
+    b_ub4[1] = x2[0]+phi_tol+EPS
+    b_ub4[2] = -x2[1]+alpha_tol+EPS
+    b_ub4[3] = x2[1]+alpha_tol+EPS
+
+    # A_ub = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4))
+    # b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4))
+    A_ub = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4))
+    b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4))
+    print("constraint 4", A_ub4.shape, b_ub4.shape)
+    cost = np.zeros(n+m)
+    cost[m:] = 1
+    res = linprog(cost, A_ub=A_ub, b_ub=b_ub, options={"disp":True})
+    print(res)
+    return res[:m], res[m:]
+
+
+def get_back_controller_qp(cur_linear_cell,x,x2,x_ref,G_inv):
+    # solve QP using scipy.optimize.minimize
+    # cur_linear_cell: current linear cell
+    # x: current state
+    # x2: [current phi, current alpha]
     # f(x,u) + delta = Ax+Bu+c+delta is in x_ref + G*P
     A = cur_linear_cell.A 
     B = cur_linear_cell.B
@@ -81,8 +144,9 @@ def get_back_controller(cur_linear_cell,x,x_ref,G_inv):
         ans[m:] = delta 
         return ans     
 
+    np.random.seed(0)
     x0 = np.random.randn(n+m)
-    # u = t[m:], delta = t[m:] = t[m:m+n]
+    # u = t[:m], delta = t[m:] = t[m:m+n]
     cons = []
     cons1 = {'type':'ineq',
         'fun':lambda t: 1 + EPS - (G_inv.dot(A.dot(x) + B.dot(t[:m]) + c + t[m:].reshape(-1,1)-x_ref))[:,0], # >= 0
@@ -100,6 +164,21 @@ def get_back_controller(cur_linear_cell,x,x_ref,G_inv):
         'jac':lambda t: jac_H}
     opt = {'disp':False}
     cons.append(cons3)
+
+    phi_tol = np.pi/180.0*0.5 # |phi-phi0| <= phi_tol, phi = t[m-2]
+    alpha_tol = 0.0005 #|alpha-alpha0| <= alpha_tol, alpha = t[m-1]
+    x2[1] *= 2
+    jac_4 = np.zeros((4,n+m))
+    jac_4[0,m-2] = 1
+    jac_4[1,m-2] = -1
+    jac_4[2,m-1] = 1
+    jac_4[3,m-1] = -1
+    cons4 = {'type':'ineq',
+    	'fun':lambda t: np.array([t[m-2]-x2[0]+phi_tol+EPS, x2[0]-t[m-2]+phi_tol+EPS,
+    		t[m-1]-x2[1]+alpha_tol+EPS, x2[1]-t[m-1]+alpha_tol+EPS]),
+    	'jac':lambda t: jac_4}
+    cons.append(cons4)
+
     res_cons = optimize.minimize(loss, x0, jac=jac,constraints=cons,
                                  method='SLSQP', options=opt)
     x_res = res_cons['x']
@@ -167,7 +246,7 @@ def carrot_closed_loop_simulation2_visualize():
     data = output2[t,:]
     ### get controller
     theta_cur, x_cur = data 
-    print("data:theta=%f,x=%f"%(x_cur,theta_cur))
+    print("data:x=%f,theta=%f"%(x_cur,theta_cur))
     phi_cur = gripper_state[2]
     tol = np.pi/180.0*5
     theta_diff = np.abs(theta_cur - pos_over_time[t,2])
@@ -185,7 +264,6 @@ def carrot_closed_loop_simulation2_visualize():
         cur_x = cur_x.reshape((-1,1))
         # compute distance from cur_x to the nearest polytope
         cur_x_stack = np.tile(cur_x,(l,1)) # equivalent to repmat
-        print(cur_x_stack.shape, x_stack.shape)
         px = G_inv_stack.dot(cur_x_stack-x_stack)
         px_star = np.maximum(np.minimum(px,1),-1)
         d_signed = G_stack.dot(px-px_star) 
@@ -208,7 +286,7 @@ def carrot_closed_loop_simulation2_visualize():
             # cur_u_lin = prog1.get_solution(cur_u_var)
             # print cur_u_lin
 
-            cur_u_lin, cur_delta = get_back_controller(cur_linear_cell,cur_x,polytube_controller_x[idx_min],polytube_controller_G_inv[idx_min])
+            cur_u_lin, cur_delta = get_back_controller(cur_linear_cell,cur_x,gripper_state[2:],polytube_controller_x[idx_min],polytube_controller_G_inv[idx_min])
             # the next state is computed from linear dynamics
             # or the full nonlinear dynamics?
             next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin).reshape((-1,1)) + cur_linear_cell.c)[:,0]
@@ -216,11 +294,12 @@ def carrot_closed_loop_simulation2_visualize():
             F1, F1_tp, F1_tm, gamma1, v1, Fn, Ft, F2, F2_tp, F2_tm, phi_next, omega = cur_u_lin
             
             dx = x - pos_over_time[t,0]
-            print(pos_over_time[t,:].shape, next_x_lin.shape)
             next_x_lin[-1] = pos_over_time[t,-1] + np.minimum(np.maximum((next_x_lin[-1]-pos_over_time[t,-1]),-0.1),0.1)
             cur_u_lin = F_over_time[t,:] + np.minimum(np.maximum((cur_u_lin-F_over_time[t,:]),-0.1),0.1)
-
-            visualize(next_x_lin,cur_u_lin,t)
+            print_pos(next_x_lin,cur_u_lin)
+            visualize2(next_x_lin,cur_u_lin, F_over_time[t+1,:],7)
+            print_pos(next_x_lin,F_over_time[t+1,:])
+            #visualize(next_x_lin,cur_u_lin,t)
         else:
             print("d_min=0")
             # inside nearest polytope, use polytopic control law
@@ -261,6 +340,33 @@ def visualize(X,F,t):
     fig.savefig(file_name+'_fig_latest/carrot_%d.png'%t, dpi=100)
     plt.close()
     return fig
+
+def visualize2(X,F,F2,t):
+    fig,ax1 = plt.subplots()
+    ax1.set_xlabel("x",fontsize=20)
+    ax1.set_ylabel("y",fontsize=20)
+    ax1.set_xlim([-0.2,0.2])
+    ax1.set_ylim([-0.2,0.4])
+    fig.gca().set_aspect('equal')
+    p_list=[]
+    v=vertices(X)
+    p_list.append(patches.Polygon(v, True))
+    p=PatchCollection(p_list,color=(1,0,0),alpha=0.31,edgecolor=(1,0,0))
+    ax1.add_collection(p)
+    ax1.grid(color=(0,0,0), linestyle='--', linewidth=0.3)
+    ax1.set_title("carrot %d"%t)
+    ax1.plot([-12,12],[0,0],'black')
+    ax1.plot(X[0],X[1],'+',color=(1,0,0))# draw CoM
+    #draw_force(ax1,X,F) # draw forces
+    draw_left_finger(ax1,X,F)
+    draw_right_finger(ax1,X,F)
+    draw_left_finger(ax1,X,F2)
+    draw_right_finger(ax1,X,F2)
+    t += 1
+    fig.savefig(file_name+'_fig_latest/carrot_%d.png'%t, dpi=100)
+    plt.close()
+    return fig
+
 
 def vertices(X,N=50):
     x,y,theta=X[:3]

@@ -35,20 +35,20 @@ if __name__=="__main__":
 	idx = int(params[0])
 	T = int(params[idx+27])
 	t0 = int(T/4*2)
+	# t0 = int(T/4*3)
 	#t0 = 0
 	list_of_cells2 = []
 	for t in range(t0,T):
-		v1 = F_over_time[t,4]
-		if v1 > 0:
-			A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		else:
-			A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		list_of_cells2.append(linear_cell(A,B,c,polytope(H,h)))
 		
 	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
+	# x0 = np.vstack((x0,F_over_time[t0,-2:].reshape((-1,1))))
 	pos_final = params[idx+20:idx+27]
+	# pos_final = np.hstack((pos_final,F_over_time[-1,-2:]))
 	n = 7
+	# n += 2
 	epsilon = 0.01
 	goal=zonotope(pos_final.reshape(-1,1),np.eye(n)*epsilon)
 
@@ -58,16 +58,14 @@ if __name__=="__main__":
 
 	list_of_cells1 = []
 	for t in range(t0):
-		v1 = F_over_time[t,4]
-		if v1 > 0:
-			A,B,c,H,h = calin2.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		else:
-			A,B,c,H,h = calin3.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 		list_of_cells1.append(linear_cell(A,B,c,polytope(H,h)))
 
 	pos_init = pos_over_time[0,:]
 	x0 = pos_init.reshape((-1,1))
+	# x0 = np.vstack((x0,F_over_time[0,-2:].reshape((-1,1))))
 	pos_final = pos_over_time[t0,:]
+	# pos_final = np.hstack((pos_final,F_over_time[t0,-2:]))
 	goal=zonotope(pos_final.reshape(-1,1),G2[0])
 	(x1,u1,G1,theta1)= polytraj.polytopic_trajectory_given_modes(x0,list_of_cells1,goal,eps=1,order=1)
 

@@ -40,7 +40,24 @@ def linearize(X,F,params):
 
 	H,h = constraints(X,F,params)
 
-	return A, B, c, H, h  
+	# # change linearization model
+	# n_ = len(X)
+	# m_ = len(F)
+	# A_new = np.zeros((n_+2, n_+2))
+	# A_new[:n_,:n_] = A
+	# B_new = np.zeros((n_+2,m_))
+	# B_new[:n_,:m_] = B 
+	# B_new[n_,-2] = 1
+	# B_new[n_+1,-1] = 1
+	# c_new = np.zeros((n_+2,1))
+	# c_new[:n_,:] = c
+	# h_n, h_m = H.shape
+	# H_new = np.zeros((h_n,h_m+2))
+	# H_new[:,:h_m] = H[:,:h_m]
+	# H_new[:,h_m+2:] = H[:,h_m:]
+
+	# return A_new, B_new, c_new, H_new, h
+	return A, B, c, H, h
 
 def df(X,F,params):
 	# f = x_ddot
