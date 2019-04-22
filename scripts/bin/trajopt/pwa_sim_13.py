@@ -16,6 +16,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
+import osqp
+import scipy.sparse as sparse
 
 file_name = "trajopt_example13_latest"
 EPS = 0.0001
@@ -38,6 +40,75 @@ USE_GOOD_INITIAL_GUESS = 0
 SAVE_STATE_AND_CONTROL = 1
 d = 0.018 # hard code
 def get_back_controller(cur_linear_cell,x,x_ref,G,G_inv):
+	# solve LP using osqp
+	# cur_linear_cell: current linear cell
+	# x: current state
+	# f(x,u) + delta = Ax+Bu+c+delta is in x_ref + G*p, -1 <= p(i) <= 1, for all i
+	A = cur_linear_cell.A 
+	B = cur_linear_cell.B
+	c = cur_linear_cell.c 
+	p = cur_linear_cell.p
+	H = p.H
+	h = p.h 
+	n = len(x)
+	m = int(B.shape[1])
+	#print("n=%d,m=%d"%(n,m))
+	# t = [u_1,...,u_m|delta_1,...,delta_n|p_1,...,p_n|w]
+	A_eq1 = np.hstack((B,np.eye(n),-G,np.zeros((n,1))))
+	b_eq1 = (-A.dot(x)-c+x_ref)[:,0]
+
+	A_ub1 = np.hstack((np.zeros((n,m+n)),np.eye(n),np.zeros((n,1))))
+	b_ub1 = np.ones(n)
+
+	#print("constraint 1", A_ub1.shape, b_ub1.shape)
+
+	A_ub2 = np.hstack((np.zeros((n,m+n)),-np.eye(n),np.zeros((n,1))))
+	b_ub2 = np.ones(n)
+
+	A_ub3 = np.hstack((np.zeros((n,m)),np.eye(n),np.zeros((n,n)),-np.ones((n,1))))
+	b_ub3 = np.zeros(n)
+
+	A_ub4 = np.hstack((np.zeros((n,m)),-np.eye(n),np.zeros((n,n)),-np.ones((n,1))))
+	b_ub4 = np.zeros(n)
+
+	num_constraints = H.shape[0]
+	A_ub5 = np.zeros((num_constraints,2*n+m+1))
+	A_ub5[:,:m] = H[:,n:]
+	b_ub5 = (-H[:,:n].dot(x) + h + EPS)[:,0]
+
+	#print("constraint 3", A_ub3.shape, b_ub3.shape)
+	A_ub = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4,A_ub5,A_eq1,-A_eq1))
+	A_ub = sparse.csc_matrix(A_ub)
+	b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4,b_ub5,b_eq1,-b_eq1))
+	b_lb = -np.inf*np.ones(len(b_ub))
+	# A_ub = []#np.vstack((A_ub2))
+	# b_ub = []#np.hstack((b_ub2))
+
+	prob_dim = 2*n+m+1
+	P = np.zeros((prob_dim,prob_dim))
+	P = sparse.csc_matrix(P)
+	q = np.zeros(prob_dim)
+	q[prob_dim-1] = 1
+	#print("A upper bound")
+	#print(A_ub)
+	#print("b upper bound")
+	#print(b_ub)
+
+	# Create an OSQP object
+	prob = osqp.OSQP()
+
+	# Setup workspace and change alpha parameter
+	prob.setup(P, q, A_ub, b_lb, b_ub,verbose = False)
+
+	# Solve problem
+	res = prob.solve()
+	# print(res.info.status)
+	#print(res.x)
+	#assert(1 == 0)
+	return res.x[:m], res.x[m:m+n], res.x[2*n+m]
+
+
+def get_back_controller_linprog(cur_linear_cell,x,x_ref,G,G_inv):
     # solve LP using scipy.optimize.linprog
     # cur_linear_cell: current linear cell
     # x: current state
@@ -50,7 +121,7 @@ def get_back_controller(cur_linear_cell,x,x_ref,G,G_inv):
     h = p.h 
     n = len(x)
     m = int(B.shape[1])
-
+    print("n=%d,m=%d"%(n,m))
     # t = [u_1,...,u_m|delta_1,...,delta_n|p_1,...,p_n|w]
     A_eq1 = np.hstack((B,np.eye(n),-G,np.zeros((n,1))))
     b_eq1 = (-A.dot(x)-c+x_ref)[:,0]
@@ -83,6 +154,16 @@ def get_back_controller(cur_linear_cell,x,x_ref,G,G_inv):
 
     cost = np.zeros(2*n+m+1)
     cost[2*n+m] = 1
+
+    print("A eq")
+    print(A_eq1)
+    print("b eq")
+    print(b_eq1)
+    print("A upper bound")
+    print(A_ub)
+    print("b upper bound")
+    print(b_ub)
+
     res = linprog(cost, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq1, b_eq=b_eq1, options={"disp":True})
     print(res.x)
     return res.x[:m], res.x[m:m+n], res.x[2*n+m]
@@ -122,13 +203,12 @@ def run():
 		G_inv_stack = scipy.linalg.block_diag(G_inv_stack, polytube_controller_G_inv[i])
 		theta_stack = np.vstack((theta_stack, polytube_controller_theta[i]))
 
-
-	__ = 3 # total time steps
+	__ = 30 # total time steps
 	## sanity check
-	for t in range(__):
-		print('t=%d'%t)
-		print('x=',pos_over_time[t,:])
-		print('u=',F_over_time[t,:])
+	# for t in range(__):
+	# 	print('t=%d'%t)
+	# 	print('x=',pos_over_time[t,:])
+	# 	print('u=',F_over_time[t,:])
 	init_state = pos_over_time[0,:]
 	#init_state[0] -= 0.1
 	cur_x = init_state
@@ -174,7 +254,7 @@ def run():
 		idx_min = -1
 		w_min = None
 		for idx in range(T):
-			print('idx=%d'%idx)
+			#print('idx=%d'%idx)
 			cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
 			cur_u_lin, cur_delta, cur_w = get_back_controller(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx],polytube_controller_G_inv[idx])
 			if w_min == None or cur_w < w_min:
@@ -183,12 +263,18 @@ def run():
 				w_min = cur_w
 		assert(idx_min > -1)
 		EPS = 1e-6
+		if idx_min >= T - 1:
+			print('success')
+			break
+		print('idx=%d'%idx_min)
 		if w_min < EPS: # inside nearest polytope, use polytopic control law
 			cur_u_lin = polytube_controller_u[idx_min]
 		cur_linear_cell = polytube_controller_list_of_cells[idx_min]
 		next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c)[:,0]
 		visualize(cur_x,cur_u_lin,t)
 		cur_x = next_x_lin
+		cur_x[0] = DistanceCentroidToCoM*np.sin(cur_x[2])-r*cur_x[2]
+		cur_x[1] = r - DistanceCentroidToCoM*np.cos(cur_x[2])
 	visualize(cur_x,cur_u_lin,t)
     	
 

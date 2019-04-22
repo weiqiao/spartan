@@ -575,3 +575,83 @@ Iteration    Objective       Primal Inf.    Dual Inf.      Time
 Solved with barrier
 Solved in 6036 iterations and 0.42 seconds
 Optimal objective -2.187693064e+01
+
+Gurobi 8.1.1 (linux64, Python) logging started Sat Apr 20 17:38:36 2019
+
+Academic license - for non-commercial use only
+Warning for adding constraints: zero or small (< 1e-13) coefficients, ignored
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 14938 rows, 27126 columns and 63882 nonzeros
+Coefficient statistics:
+  Matrix range     [9e-06, 8e+01]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [3e-03, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 10873 rows and 18252 columns
+Presolve time: 0.04s
+Presolved: 4065 rows, 8874 columns, 36537 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Free vars  : 204
+ AA' NZ     : 3.810e+04
+ Factor NZ  : 2.891e+05 (roughly 8 MBytes of memory)
+ Factor Ops : 2.910e+07 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.03723898e-01  3.73485401e-04  6.40e+02 1.08e+01  1.32e+02     0s
+   1  -8.87043208e+00 -4.87787206e+03  2.71e+01 1.31e-07  6.08e+00     0s
+   2  -1.00016166e+00 -3.10737211e+03  8.26e-01 1.21e-06  4.80e-01     0s
+   3  -1.41871179e+00 -9.58319777e+02  1.18e-02 2.90e-07  1.02e-01     0s
+   4  -3.99004638e+00 -2.25519892e+02  5.28e-04 8.88e-08  2.35e-02     0s
+   5  -8.12920849e+00 -9.88207706e+01  7.83e-11 4.98e-07  9.60e-03     0s
+   6  -1.49134448e+01 -5.20461239e+01  1.60e-10 1.39e-06  3.93e-03     0s
+   7  -1.74984536e+01 -3.79923629e+01  8.43e-11 7.56e-07  2.17e-03     0s
+   8  -1.94323521e+01 -2.82949535e+01  3.55e-11 2.91e-07  9.38e-04     0s
+   9  -2.05389483e+01 -2.52369061e+01  3.65e-11 1.42e-07  4.97e-04     0s
+  10  -2.11307230e+01 -2.35039057e+01  1.92e-11 6.36e-08  2.51e-04     0s
+  11  -2.14816432e+01 -2.25676599e+01  1.01e-11 2.33e-08  1.15e-04     0s
+  12  -2.16326574e+01 -2.23585767e+01  6.17e-12 1.59e-08  7.68e-05     0s
+  13  -2.17838838e+01 -2.21281306e+01  2.14e-12 7.68e-09  3.64e-05     0s
+  14  -2.18353626e+01 -2.19644499e+01  8.75e-13 2.43e-09  1.37e-05     0s
+  15  -2.18547690e+01 -2.19200049e+01  4.50e-13 1.16e-09  6.91e-06     0s
+  16  -2.18626412e+01 -2.19036574e+01  2.84e-13 6.95e-10  4.34e-06     0s
+  17  -2.18662071e+01 -2.18955901e+01  2.11e-13 4.81e-10  3.11e-06     0s
+  18  -2.18723738e+01 -2.18884412e+01  8.22e-14 2.93e-10  1.70e-06     0s
+  19  -2.18748059e+01 -2.18819842e+01  2.67e-12 1.58e-09  7.60e-07     0s
+  20  -2.18763765e+01 -2.18778586e+01  1.99e-12 3.16e-09  1.57e-07     0s
+  21  -2.18766418e+01 -2.18770340e+01  3.52e-11 1.51e-09  4.15e-08     0s
+  22  -2.18766905e+01 -2.18768346e+01  1.33e-11 8.07e-10  1.53e-08     0s
+  23  -2.18767047e+01 -2.18767669e+01  1.44e-11 5.18e-10  6.58e-09     0s
+  24  -2.18767110e+01 -2.18767391e+01  1.04e-11 3.11e-10  2.97e-09     0s
+  25  -2.18767141e+01 -2.18767232e+01  9.16e-12 1.39e-10  9.64e-10     0s
+  26  -2.18767148e+01 -2.18767161e+01  2.61e-11 1.67e-11  1.43e-10     0s
+  27  -2.18767150e+01 -2.18767151e+01  6.58e-11 1.94e-11  1.77e-11     0s
+
+Barrier solved model in 27 iterations and 0.17 seconds
+Optimal objective -2.18767150e+01
+
+Crossover log...
+
+       0 DPushes remaining with DInf 3.2993732e-14                 0s
+
+    2715 PPushes remaining with PInf 0.0000000e+00                 0s
+       0 PPushes remaining with PInf 0.0000000e+00                 0s
+
+  Push phase complete: Pinf 0.0000000e+00, Dinf 4.0000000e-06      0s
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+    3535   -2.1876715e+01   0.000000e+00   4.000000e-06      0s
+    3537   -2.1876931e+01   0.000000e+00   0.000000e+00      0s
+
+Solved with barrier
+Solved in 3537 iterations and 0.24 seconds
+Optimal objective -2.187693064e+01
