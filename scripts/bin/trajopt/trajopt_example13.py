@@ -94,6 +94,8 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddConstraint(theta_dot_next - (theta_dot + theta_ddot*dt) <= DynamicsConstraintEps)
 			self.AddConstraint(theta_dot_next - (theta_dot + theta_ddot*dt) >= -DynamicsConstraintEps)
 			
+			# This constraint and the next constraint are ignored in linearization, but are enforced 
+			#     after the next state is computed by computing x and y from theta.
 			# not penetrating ground constraints
 			self.AddConstraint(y + DistanceCentroidToCoM*sym.cos(theta) - r <= DynamicsConstraintEps)
 			self.AddConstraint(y + DistanceCentroidToCoM*sym.cos(theta) - r >= -DynamicsConstraintEps)

@@ -57,7 +57,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			F = self.NewContinuousVariables(8,'F_%d' % t) 
 			F_over_time = np.vstack((F_over_time,F)) 
 
-		pos = self.NewContinuousVariables(6, 'pos_%d' % 0) # pos = [x, y, theta, x_dot, y_dot, theta_dot, d]
+		pos = self.NewContinuousVariables(6, 'pos_%d' % 0) # pos = [x, y, theta, x_dot, y_dot, theta_dot]
 		pos_over_time = pos
 		for t in range(1,T+1):
 			pos = self.NewContinuousVariables(6,'pos_%d' % t)

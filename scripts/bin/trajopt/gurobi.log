@@ -655,3 +655,325 @@ Iteration    Objective       Primal Inf.    Dual Inf.      Time
 Solved with barrier
 Solved in 3537 iterations and 0.24 seconds
 Optimal objective -2.187693064e+01
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:10:01 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 20138 rows, 37926 columns and 89400 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 14637 rows and 26070 columns
+Presolve time: 0.05s
+Presolved: 5501 rows, 11856 columns, 44652 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Dense cols : 6
+ Free vars  : 225
+ AA' NZ     : 3.988e+04
+ Factor NZ  : 2.406e+05 (roughly 9 MBytes of memory)
+ Factor Ops : 1.935e+07 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.66829690e-02  1.69841075e-04  1.81e+02 1.10e+01  3.74e+01     0s
+   1  -1.73093059e+00 -4.62634304e+03  1.48e+01 2.66e-07  3.34e+00     0s
+
+Barrier performed 1 iterations in 0.08 seconds
+Barrier solve interrupted - model solved by another algorithm
+
+
+Solved with dual simplex
+Solved in 296 iterations and 0.08 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:13:53 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 20138 rows, 37926 columns and 89400 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 14637 rows and 26070 columns
+Presolve time: 0.05s
+Presolved: 5501 rows, 11856 columns, 44652 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Dense cols : 6
+ Free vars  : 225
+ AA' NZ     : 3.988e+04
+ Factor NZ  : 2.406e+05 (roughly 9 MBytes of memory)
+ Factor Ops : 1.935e+07 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.66829690e-02  1.69841075e-04  1.81e+02 1.10e+01  3.74e+01     0s
+   1  -1.73093059e+00 -4.62634304e+03  1.48e+01 2.66e-07  3.34e+00     0s
+
+Barrier performed 1 iterations in 0.08 seconds
+Barrier solve interrupted - model solved by another algorithm
+
+
+Solved with dual simplex
+Solved in 296 iterations and 0.08 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:14:08 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 10138 rows, 19026 columns and 44850 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [4e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 7404 rows and 13122 columns
+Presolve time: 0.02s
+Presolved: 2734 rows, 5904 columns, 22422 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Dense cols : 6
+ Free vars  : 117
+ AA' NZ     : 1.979e+04
+ Factor NZ  : 1.163e+05 (roughly 4 MBytes of memory)
+ Factor Ops : 9.120e+06 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.03453675e-02  3.90243450e-05  2.25e+02 1.07e+01  4.64e+01     0s
+   1  -1.88055461e+00 -2.18365667e+03  2.75e+01 1.37e-03  5.92e+00     0s
+   2  -1.87224607e+00  3.39065347e+06  2.70e+01 3.31e-07  5.59e+00     0s
+   3  -1.87222929e+00  1.56985811e+16  2.70e+01 2.50e-01  6.50e+05     0s
+   4  -1.83467651e+00  1.62386779e+29  2.70e+01 1.10e+12  1.96e+18     0s
+
+Barrier performed 4 iterations in 0.05 seconds
+Barrier solve interrupted - model solved by another algorithm
+
+
+Solved with dual simplex
+Solved in 146 iterations and 0.05 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:21:50 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 20138 rows, 37926 columns and 89400 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 14637 rows and 26070 columns
+Presolve time: 0.05s
+Presolved: 5501 rows, 11856 columns, 44652 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Dense cols : 6
+ Free vars  : 225
+ AA' NZ     : 3.988e+04
+ Factor NZ  : 2.406e+05 (roughly 9 MBytes of memory)
+ Factor Ops : 1.935e+07 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.66829690e-02  1.69841075e-04  1.81e+02 1.10e+01  3.74e+01     0s
+   1  -1.73093059e+00 -4.62634304e+03  1.48e+01 2.66e-07  3.34e+00     0s
+
+Barrier performed 1 iterations in 0.08 seconds
+Barrier solve interrupted - model solved by another algorithm
+
+
+Solved with dual simplex
+Solved in 296 iterations and 0.08 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:24:53 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 20138 rows, 37926 columns and 89400 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 14637 rows and 26070 columns
+Presolve time: 0.05s
+Presolved: 5501 rows, 11856 columns, 44652 nonzeros
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Dense cols : 6
+ Free vars  : 225
+ AA' NZ     : 3.988e+04
+ Factor NZ  : 2.406e+05 (roughly 9 MBytes of memory)
+ Factor Ops : 1.935e+07 (less than 1 second per iteration)
+ Threads    : 8
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.66829690e-02  1.69841075e-04  1.81e+02 1.10e+01  3.74e+01     0s
+   1  -1.73093060e+00 -4.62634304e+03  1.48e+01 2.66e-07  3.34e+00     0s
+
+Barrier performed 1 iterations in 0.08 seconds
+Barrier solve interrupted - model solved by another algorithm
+
+
+Solved with dual simplex
+Solved in 294 iterations and 0.08 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:32:09 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 21438 rows, 40326 columns and 94800 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [2e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 1311 rows and 2988 columns
+Presolve time: 0.02s
+
+Solved with barrier
+Solved in 0 iterations and 0.02 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:34:57 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 10788 rows, 20226 columns and 47550 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [4e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 661 rows and 1488 columns
+Presolve time: 0.01s
+
+Solved with barrier
+Solved in 0 iterations and 0.01 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:35:29 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 10138 rows, 19026 columns and 44550 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [4e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 661 rows and 1488 columns
+Presolve time: 0.01s
+
+Solved with barrier
+Solved in 0 iterations and 0.01 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:36:15 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 5913 rows, 11226 columns and 26550 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [4e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [6e-04, 4e+00]
+Presolve removed 4691 rows and 8640 columns
+Presolve time: 0.01s
+Presolved: 1222 rows, 2586 columns, 9270 nonzeros
+
+Iteration    Objective       Primal Inf.    Dual Inf.      Time
+       0      handle free variables                          0s
+
+Solved in 112 iterations and 0.01 seconds
+Infeasible or unbounded model
+
+Gurobi 8.1.1 (linux64, Python) logging started Tue Apr 23 16:46:10 2019
+
+Academic license - for non-commercial use only
+Changed value of parameter TimeLimit to 150.0
+   Prev: 1e+100  Min: 0.0  Max: 1e+100  Default: 1e+100
+Optimize a model with 10788 rows, 20226 columns and 47550 nonzeros
+Coefficient statistics:
+  Matrix range     [6e-07, 1e+02]
+  Objective range  [4e-02, 1e+00]
+  Bounds range     [0e+00, 0e+00]
+  RHS range        [2e-04, 1e+02]
+
+Concurrent LP optimizer: primal simplex, dual simplex, and barrier
+Showing barrier log only...
+
+Presolve removed 661 rows and 1488 columns
+Presolve time: 0.01s
+
+Solved with barrier
+Solved in 0 iterations and 0.01 seconds
+Infeasible or unbounded model

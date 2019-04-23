@@ -210,7 +210,9 @@ def run():
 	# 	print('x=',pos_over_time[t,:])
 	# 	print('u=',F_over_time[t,:])
 	init_state = pos_over_time[0,:]
-	#init_state[0] -= 0.1
+	init_state[2] = 10.0*np.pi/180.0
+	init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
+	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
 	cur_x = init_state
 	for t in range(__):
 		# print('t=%d,angle=%f'%(t,cur_x[2]/np.pi*180.0))
