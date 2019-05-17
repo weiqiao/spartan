@@ -12,9 +12,9 @@ import poly_trajectory_14 as polytraj
 from pwa_system import system, linear_cell
 import pickle
 
-# compute tube for example 13.
+# compute tube for example 14.
 
-SAVE_OUTPUT = 1
+SAVE_OUTPUT = 0
 if __name__=="__main__":
 	file_name = "trajopt_example14_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
@@ -37,8 +37,14 @@ if __name__=="__main__":
 	list_of_cells = []
 	for t in range(t0,T):
 		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		print('A',A)
+		print('B',B)
+		print('c',c)
 		list_of_cells.append(linear_cell(A,B,c,polytope(H,h)))
-		
+		print(list_of_cells[t].A)
+		print(list_of_cells[t].B)
+		print(list_of_cells[t].c)
+
 	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
 	pos_final = params[idx+19:idx+25]

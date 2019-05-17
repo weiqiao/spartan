@@ -88,6 +88,71 @@ def test2():
 		print(tmp.shape)
 		all(tmp<=0e-14)
 
+def test3():
+	file_name = "trajopt_example14_latest"
+	state_and_control = pickle.load(open(file_name + ".p","rb"))
+	pos_over_time = state_and_control["state"]
+	F_over_time = state_and_control["control"]
+	params = state_and_control["params"]
+	x = pos_over_time
+	u = F_over_time
+
+	polytube_controller = pickle.load(open("trajopt_example14_latest"+"_tube_output.p","rb"))
+	polytube_controller_x = polytube_controller['x']
+	polytube_controller_u = polytube_controller['u']
+	polytube_controller_theta = polytube_controller['theta']
+	polytube_controller_list_of_cells = polytube_controller['list_of_cells']
+
+	idx = int(params[0])
+	T = int(params[idx+25])
+	t0 = 0
+
+	cur_x = pos_over_time[0,:]
+	print('cur_x')
+	print(cur_x)
+	for t in range(t0,2):
+		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+		cur_u_lin = F_over_time[t]
+		next_x_lin = (A.dot(cur_x) + B.dot(cur_u_lin) + c[:,0])
+		assert(np.sum(np.abs(next_x_lin - pos_over_time[t+1,:])) < 1e-4)
+
+		cur_linear_cell = polytube_controller_list_of_cells[t]
+		next_x_lin2 = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
+
+		print('A')
+		print(A)
+		print('B')
+		print(B)
+		print('c')
+		print(c)
+		print('cell_A')
+		print(cur_linear_cell.A)
+		print('cell_B')
+		print(cur_linear_cell.B)
+		print('cell_c')
+		print(cur_linear_cell.c)
+		print('cur_u_lin')
+		print(cur_u_lin)
+		print('next_x_lin')
+		print(next_x_lin)
+		print('next_x_lin2')
+		print(next_x_lin2)
+
+		cur_x = next_x_lin2
+
+	# cur_x = pos_over_time[0]
+	# for t in range(t0,T):
+	# 	cur_linear_cell = polytube_controller_list_of_cells[t]
+	# 	cur_u_lin = F_over_time[t]
+	# 	next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
+	# 	print('next_x_lin')
+	# 	print(next_x_lin)
+	# 	print('pos_over_time')
+	# 	print(pos_over_time[t+1])
+	# 	assert(np.sum(np.abs(next_x_lin - pos_over_time[t+1,:])) < 1e-3)
+	# 	#cur_x = next_x_lin
+	# 	cur_x = pos_over_time[t+1]
+
 
 if __name__=="__main__":
-	test2()
+	test3()
