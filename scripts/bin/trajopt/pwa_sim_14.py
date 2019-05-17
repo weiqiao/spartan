@@ -256,14 +256,14 @@ def get_back_controller3(cur_linear_cell,x,cur_phi,x_ref,G,G_inv,params=None):
 	# pi <= eps
 	A_ub1 = np.hstack((np.zeros((n,m+n)),np.eye(n),np.zeros((n,1))))
 	# b_ub1 = np.ones(n)*EPS
-	b_ub1 = np.ones(n)*EPS
+	b_ub1 = np.ones(n)
 
 	#print("constraint 1", A_ub1.shape, b_ub1.shape)
 
 	# -eps <= pi
 	A_ub2 = np.hstack((np.zeros((n,m+n)),-np.eye(n),np.zeros((n,1))))
 	# b_ub2 = np.ones(n)*EPS
-	b_ub2 = np.ones(n)*EPS
+	b_ub2 = np.ones(n)
 
 	# # delta <= w
 	# A_ub3 = np.hstack((np.zeros((n,m)),np.eye(n),np.zeros((n,n)),-np.ones((n,1))))
@@ -735,7 +735,7 @@ def run():
 			cur_u_lin = polytube_controller_u[idx_min]
 			cur_idx = idx_min
 		else:
-			cur_idx = min(T-1,idx_min)
+			cur_idx = min(T-1,idx_min+1)
 			print('cur_idx=%d'%cur_idx)
 			cur_linear_cell = polytube_controller_list_of_cells[cur_idx] # linear_cell(A,B,c,polytope(H,h))
 			cur_u_lin, cur_delta, cur_w, res_info = get_back_controller3(cur_linear_cell,cur_x,cur_phi,polytube_controller_x[cur_idx],polytube_controller_G[cur_idx],polytube_controller_G_inv[cur_idx],1)
@@ -789,6 +789,14 @@ def run():
 		# print('cur_phi=%f'%cur_phi)
 		if cur_idx >= T-1:
 			break
+
+		# manually insert disturbance
+		if t == 30:
+			init_state = pos_over_time[0,:]
+			init_state[2] = 10.0*np.pi/180.0
+			init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
+			init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
+			cur_x = init_state
 	visualize(cur_x,cur_u_lin,t)
     	
 
