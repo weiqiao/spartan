@@ -107,7 +107,7 @@ def build_mip_ch(S, T, Q, R, P, x_goal, norm):
 """
 Visualization Tools
 """    
-def visualize(X,F,t):
+def visualize(X,F,t,modes):
     fig,ax1 = plt.subplots()
     ax1.set_xlabel("x",fontsize=20)
     ax1.set_ylabel("y",fontsize=20)
@@ -125,7 +125,8 @@ def visualize(X,F,t):
     ax1.plot(X[0],X[1],'+',color=(1,0,0))# draw CoM
     #draw_force(ax1,X,F) # draw forces
     draw_left_finger(ax1,X,F)
-    draw_right_finger(ax1,X,F)
+    if modes[0] == 1:
+	    draw_right_finger(ax1,X,F)
     t += 1
     fig.savefig(file_name+'_fig_latest/carrot_%d.png'%t, dpi=100)
     plt.close()
@@ -306,6 +307,7 @@ if __name__ == '__main__':
 	file_name = 'tree_sampling_14'
 	X = np.zeros((T,nx))
 	U = np.zeros((T,nu))
+	modes = np.zeros((T,nm))
 	for t in range(T):
 		print('t=%d'%t)
 		for k in range(nx):
@@ -314,4 +316,7 @@ if __name__ == '__main__':
 		for k in range(nu):
 			v = model.getVarByName('u'+str(t)+'[%d]'%k)
 			U[t,k] = v.x 
-		visualize(X[t,:],U[t,:],t)
+		for k in range(nm):
+			v = model.getVarByName('d'+str(t)+'[%d]'%k)
+			modes[t,k] = v.x 
+		visualize(X[t,:],U[t,:],t,modes[t,:])
