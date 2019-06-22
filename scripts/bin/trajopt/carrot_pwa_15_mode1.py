@@ -172,7 +172,7 @@ def constraints(X,F,params):
 	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
-	StateBound = np.array([np.array(params[idx+1:idx+8]),np.array(params[idx+8:idx+16])])
+	StateBound = np.array([np.array(params[idx+1:idx+8]),np.array(params[idx+8:idx+15])])
 	r0 = DistanceCentroidToCoM # alias
 
 	# # ground friction cone constraints 

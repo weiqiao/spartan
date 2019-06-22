@@ -386,12 +386,16 @@ if __name__=="__main__":
 			visualize(pos_over_time[t,:],F_over_time[t,:],t)
 
 	if SAVE_STATE_AND_CONTROL:
-		F_over_time = F_over_time[:,:7]
+		#F_over_time = F_over_time[:,:7]
 		params_save = np.array([11])
 		params_save = np.append(params_save,np.array([mass, inertia, DistanceCentroidToCoM, r, dt, 
 			DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel]))
 		params_save = np.append(params_save,StateBound[0,:])
 		params_save = np.append(params_save,StateBound[1,:])
+		phi_init = F_over_time[0,6]
+		theta_init = pos_over_time[0,2]
+		omega_init = d*np.sin(phi_init - theta_init) + r
+		pos_init = np.append(pos_init, omega_init)
 		params_save = np.append(params_save,pos_init)
 		params_save = np.append(params_save,pos_final)
 		params_save = np.append(params_save,[T])
