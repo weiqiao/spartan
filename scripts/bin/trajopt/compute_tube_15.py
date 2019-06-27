@@ -14,7 +14,7 @@ import pickle
 
 # compute tube for example 15.
 
-SAVE_OUTPUT = 0
+SAVE_OUTPUT = 1
 if __name__=="__main__":
 	file_name = "trajopt_example15_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
@@ -25,14 +25,14 @@ if __name__=="__main__":
 		params_save = np.array([11])                                                                    # 0: idx
 		params_save = np.append(params_save,np.array([mass, inertia, DistanceCentroidToCoM, r, dt, 
 			DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel]))  # 1~idx
-		params_save = np.append(params_save,StateBound[0,:])											# idx+1~idx+7
-		params_save = np.append(params_save,StateBound[1,:])											# idx+8~idx+14
-		params_save = np.append(params_save,pos_init)												    # idx+15~idx+21
-		params_save = np.append(params_save,pos_final)												 	# idx+22~idx+28
-		params_save = np.append(params_save,[T])														# idx+29
+		params_save = np.append(params_save,StateBound[0,:])											# idx+1~idx+8
+		params_save = np.append(params_save,StateBound[1,:])											# idx+9~idx+16
+		params_save = np.append(params_save,pos_init)												    # idx+17~idx+24
+		params_save = np.append(params_save,pos_final)												 	# idx+25~idx+32
+		params_save = np.append(params_save,[T])														# idx+33
 	'''
 	idx = int(params[0])
-	T = int(params[idx+29])
+	T = int(params[idx+33])
 	t0 = 0
 	list_of_cells = []
 	for t in range(t0,T):
@@ -47,8 +47,8 @@ if __name__=="__main__":
 
 	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
-	pos_final = params[idx+22:idx+29]
-	n = 7
+	pos_final = params[idx+25:idx+33]
+	n = 8
 	epsilon = 0.01
 	goal=zonotope(pos_final.reshape(-1,1),np.eye(n)*epsilon)
 

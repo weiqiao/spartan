@@ -8,9 +8,12 @@ d = 0.018
 # mode 2: left finger in contact, right finger not in contact
 # F2 and F2t disappear
 
+nx = 8
+nu = 8
+
 def linearize(X,F,params):
-	x,y,theta,x_dot,y_dot,theta_dot,omega = X
-	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 
@@ -40,8 +43,10 @@ def linearize(X,F,params):
 	B[5,:] += coeff_u*dt 
 	c[5] += coeff_c*dt 
 
+	# phi
+	B[6,6] += dt 
 	# omega
-	B[6,7] += dt 
+	B[7,7] += dt 
 
 	H,h = constraints(X,F,params)
 
@@ -67,8 +72,8 @@ def linearize(X,F,params):
 def df(X,F,params):
 	# f = x_ddot
 	# compute the linearization of f around the current point (X,F)
-	x,y,theta,x_dot,y_dot,theta_dot,omega = X
-	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
@@ -78,18 +83,19 @@ def df(X,F,params):
 	df_dx_dot = 0
 	df_dy_dot = 0
 	df_dtheta_dot = 0
+	df_dphi = 0
 	df_domega = 0
-	coeff_x = np.array([df_dx,df_dy,df_dtheta,df_dx_dot,df_dy_dot,df_dtheta_dot,df_domega])
+	coeff_x = np.array([df_dx,df_dy,df_dtheta,df_dx_dot,df_dy_dot,df_dtheta_dot,df_dphi,df_domega])
 
 	df_dF1 = np.sin(theta) / m
 	df_dF1t = np.cos(theta) / m
-	df_dF2 = 0
-	df_dF2t = 0
+	df_dF2 = -np.sin(phi) / m
+	df_dF2t = np.cos(phi) / m
 	df_dFn = 0
 	df_dFt = 1 / m
-	df_dphi = 0
+	df_dvphi = 0
 	df_dvomega = 0
-	coeff_u = np.array([df_dF1,df_dF1t,df_dF2,df_dF2t,df_dFn,df_dFt,df_dphi,df_dvomega])
+	coeff_u = np.array([df_dF1,df_dF1t,df_dF2,df_dF2t,df_dFn,df_dFt,df_dvphi,df_dvomega])
 
 	# constant term
 	coeff_c = (F1*np.sin(theta) + F1t*np.cos(theta) + Ft) / m
@@ -100,8 +106,8 @@ def df(X,F,params):
 def dg(X,F,params):
 	# g = y_ddot
 	# compute the linearization of g around the current point (X,F)
-	x,y,theta,x_dot,y_dot,theta_dot,omega = X
-	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	
@@ -111,18 +117,19 @@ def dg(X,F,params):
 	dg_dx_dot = 0
 	dg_dy_dot = 0
 	dg_dtheta_dot = 0
+	dg_dphi = 0
 	dg_domega = 0
-	coeff_x = np.array([dg_dx,dg_dy,dg_dtheta,dg_dx_dot,dg_dy_dot,dg_dtheta_dot,dg_domega])
+	coeff_x = np.array([dg_dx,dg_dy,dg_dtheta,dg_dx_dot,dg_dy_dot,dg_dtheta_dot,dg_dphi,dg_domega])
 
 	dg_dF1 = -np.cos(theta) / m
 	dg_dF1t = np.sin(theta) / m
-	dg_dF2 = 0
-	dg_dF2t = 0
+	dg_dF2 = np.cos(phi) / m
+	dg_dF2t = np.sin(phi) / m 
 	dg_dFn = 1/m
 	dg_dFt = 0
-	dg_dphi = 0
+	dg_dvphi = 0
 	dg_dvomega = 0
-	coeff_u = np.array([dg_dF1,dg_dF1t,dg_dF2,dg_dF2t,dg_dFn,dg_dFt,dg_dphi,dg_dvomega])
+	coeff_u = np.array([dg_dF1,dg_dF1t,dg_dF2,dg_dF2t,dg_dFn,dg_dFt,dg_dvphi,dg_dvomega])
 
 	# constant term
 	coeff_c = (-F1*np.cos(theta) + F1t*np.sin(theta) + Fn - m*g) / m
@@ -134,45 +141,46 @@ def dg(X,F,params):
 def dh(X,F,params):
 	# h = theta_ddot
 	# compute the linearization of h around the current point (X,F)
-	x,y,theta,x_dot,y_dot,theta_dot,omega = X
-	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
 	r0 = DistanceCentroidToCoM
 
 	dh_dx = 0
 	dh_dy = 0
-	dh_dtheta = (-Fn*r0*np.cos(theta)+Ft*r0*np.sin(theta)-F2*r0*np.cos(phi-theta)+F2t*r0*np.sin(theta-phi))/I 
+	dh_dtheta = (-Fn*r0*np.cos(theta)+Ft*r0*np.sin(theta))/I 
 	dh_dx_dot = 0
 	dh_dy_dot = 0
 	dh_dtheta_dot = 0
+	dh_dphi = 0 
 	dh_domega = 0
-	coeff_x = np.array([dh_dx,dh_dy,dh_dtheta,dh_dx_dot,dh_dy_dot,dh_dtheta_dot,dh_domega])
+	coeff_x = np.array([dh_dx,dh_dy,dh_dtheta,dh_dx_dot,dh_dy_dot,dh_dtheta_dot,dh_dphi,dh_domega])
 
 	dh_dF1 = d/I
 	dh_dF1t = -r0/I
-	dh_dF2 = 0
-	dh_dF2t = 0
+	dh_dF2 = r0*np.sin(phi-theta)/I 
+	dh_dF2t = (r-r0*np.cos(theta-phi))/I
 	dh_dFn = -r0*np.sin(theta)/I 
 	dh_dFt = (r-r0*np.cos(theta))/I
-	dh_dphi = 0
+	dh_dvphi = 0
 	dh_dvomega = 0
-	coeff_u = np.array([dh_dF1,dh_dF1t,dh_dF2,dh_dF2t,dh_dFn,dh_dFt,dh_dphi,dh_dvomega])
+	coeff_u = np.array([dh_dF1,dh_dF1t,dh_dF2,dh_dF2t,dh_dFn,dh_dFt,dh_dvphi,dh_dvomega])
 
 	# constant term
-	coeff_c = (F1*d - F1t*r0 - Fn*r0*np.sin(theta) + Ft*(r-r0*np.cos(theta)))/I
+	coeff_c = (F1*d - F1t*r0 + F2*r0*np.sin(phi-theta) + F2t*(r-r0*np.cos(theta-phi)) - Fn*r0*np.sin(theta) + Ft*(r-r0*np.cos(theta)))/I
 	coeff_c -= coeff_x.dot(X) + coeff_u.dot(F)
 
 	return coeff_x, coeff_u, coeff_c
 
 def constraints(X,F,params):
-	#0,1,2,   3,    4,    5,        6,
-	x,y,theta,x_dot,y_dot,theta_dot,omega = X
-	#7, 8,   9,  10,  11, 12, 13,  14
-	F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F
+	#0,1,2,   3,    4,    5,        6,  7,
+	x,y,theta,x_dot,y_dot,theta_dot,phi,omega = X
+	#8, 9,   10, 11,  12, 13, 14,   15
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 	idx = int(params[0])
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
-	StateBound = np.array([np.array(params[idx+1:idx+8]),np.array(params[idx+8:idx+15])])
+	StateBound = np.array([np.array(params[idx+1:idx+9]),np.array(params[idx+9:idx+17])])
 	r0 = DistanceCentroidToCoM # alias
 
 	# # ground friction cone constraints 
@@ -200,8 +208,8 @@ def constraints(X,F,params):
 	# ground friction cone constraints 
 	# -mu_g * Fn - Ft <= 0
 	cons = np.zeros(len_h)
-	cons[11] = -mu_ground
-	cons[12] = -1
+	cons[12] = -mu_ground
+	cons[13] = -1
 	h2 = 0
 	# H = np.vstack((H, cons))
 	# h = np.vstack((h, h2))
@@ -210,8 +218,8 @@ def constraints(X,F,params):
 
 	# -mu_g * Fn + Ft <= 0
 	cons = np.zeros(len_h)
-	cons[11] = -mu_ground
-	cons[12] = 1
+	cons[12] = -mu_ground
+	cons[13] = 1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -219,16 +227,16 @@ def constraints(X,F,params):
 	# finger 1 friction cone constraint
 	# -mu_g * F1 - F1t <= 0
 	cons = np.zeros(len_h)
-	cons[7] = -mu_ground
-	cons[8] = -1
+	cons[8] = -mu_ground
+	cons[9] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 
 	# -mu_g * F1 + F1t <= 0
 	cons = np.zeros(len_h)
-	cons[7] = -mu_ground
-	cons[8] = 1
+	cons[8] = -mu_ground
+	cons[9] = 1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -237,16 +245,16 @@ def constraints(X,F,params):
 	# # finger 2 friction cone constraint
 	# # -mu_g * F2 - F2t <= 0
 	# cons = np.zeros(len_h)
-	# cons[9] = -mu_ground
-	# cons[10] = -1
+	# cons[10] = -mu_ground
+	# cons[11] = -1
 	# h2 = 0
 	# H = np.vstack((H, cons))
 	# h = np.vstack((h, h2))
 
 	# # -mu_g * F2 + F2t <= 0
 	# cons = np.zeros(len_h)
-	# cons[9] = -mu_ground
-	# cons[10] = 1
+	# cons[10] = -mu_ground
+	# cons[11] = 1
 	# h2 = 0
 	# H = np.vstack((H, cons))
 	# h = np.vstack((h, h2))
@@ -255,25 +263,25 @@ def constraints(X,F,params):
 	### NEW (MODE 2 ONLY): finger 2 lost contact
 	# -F2 <= 0
 	cons = np.zeros(len_h)
-	cons[8] = -1
+	cons[10] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 	# F2 <= 0
 	cons = np.zeros(len_h)
-	cons[8] = 1
+	cons[10] = 1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 	# -F2t <= 0
 	cons = np.zeros(len_h)
-	cons[9] = -1
+	cons[11] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 	# F2t <= 0
 	cons = np.zeros(len_h)
-	cons[9] = 1
+	cons[11] = 1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -282,14 +290,14 @@ def constraints(X,F,params):
 	# control bounds
 	# -F1 <= 0
 	cons = np.zeros(len_h)
-	cons[7] = -1
+	cons[8] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 
 	# F1 <= MaxInputForce
 	cons = np.zeros(len_h)
-	cons[7] = 1
+	cons[8] = 1
 	h2 = MaxInputForce
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -297,31 +305,29 @@ def constraints(X,F,params):
 	# ### OLD
 	# # -F2 <= 0
 	# cons = np.zeros(len_h)
-	# cons[9] = -1
+	# cons[10] = -1
 	# h2 = 0
 	# H = np.vstack((H, cons))
 	# h = np.vstack((h, h2))
 
 	# # F2 <= MaxInputForce
-	# # CHANGE: F2 <= thres instead of F2 <= MaxInputForce
 	# cons = np.zeros(len_h)
-	# cons[9] = 1
-	# thres = 0.1
-	# h2 = thres
+	# cons[10] = 1
+	# h2 = MaxInputForce
 	# H = np.vstack((H, cons))
 	# h = np.vstack((h, h2))
 	# ### END OLD
 
 	# -Fn <= 0
 	cons = np.zeros(len_h)
-	cons[11] = -1
+	cons[12] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 
 	# Fn <= MaxInputForce
 	cons = np.zeros(len_h)
-	cons[11] = 1
+	cons[12] = 1
 	h2 = MaxInputForce
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -329,7 +335,7 @@ def constraints(X,F,params):
 	# theta - phi <= 0
 	cons = np.zeros(len_h)
 	cons[2] = 1
-	cons[13] = -1
+	cons[6] = -1
 	h2 = 0
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
@@ -337,27 +343,13 @@ def constraints(X,F,params):
 	# phi - theta <= np.pi/2
 	cons = np.zeros(len_h)
 	cons[2] = -1
-	cons[13] = 1
+	cons[6] = 1
 	h2 = np.pi/2
 	H = np.vstack((H, cons))
 	h = np.vstack((h, h2))
 
-	# -phi <= -np.pi*5/12
-	cons = np.zeros(len_h)
-	cons[13] = -1
-	h2 = -np.pi*5/12
-	H = np.vstack((H, cons))
-	h = np.vstack((h, h2))
-
-	# phi <= np.pi*2/3
-	cons = np.zeros(len_h)
-	cons[13] = 1
-	h2 = np.pi*2/3
-	H = np.vstack((H, cons))
-	h = np.vstack((h, h2))
-
 	# state bounds
-	for i in range(7):
+	for i in range(nx):
 		cons = np.zeros(len_h)
 		cons[i] = -1
 		h2 = -StateBound[0,i]
@@ -380,11 +372,11 @@ def constraints(X,F,params):
 	# ie omega + d*cos(phi0-theta0)*theta - d*cos(phi0-theta0)*phi
 	#    >= (-d*cos(phi0-theta0)phi0 + d*cos(phi0-theta0)theta0 + d*sin(phi0-theta0) + r)
 	cons = np.zeros(len_h)
-	cons[6] = -1
+	cons[7] = -1
 	cons[2] = -d*np.cos(phi-theta)
-	cons[13] = d*np.cos(phi-theta)
-	h2 = -d*np.cos(phi-theta)*phi + d*np.cos(phi-theta)*theta + d*np.sin(phi-theta) + r
+	cons[6] = d*np.cos(phi-theta)
+	h2 = -(-d*np.cos(phi-theta)*phi + d*np.cos(phi-theta)*theta + d*np.sin(phi-theta) + r)
 	H = np.vstack((H,cons))
-	h = np.vstack((h,-h2))
+	h = np.vstack((h,h2))
 
 	return H,h

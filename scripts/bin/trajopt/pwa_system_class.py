@@ -26,6 +26,16 @@ class AffineSystem(object):
         # system size
         self.nx, self.nu = B.shape
 
+class TreeStates:
+    def __init__(self, x, modeseq, G=None):
+        """
+        x: state
+        modeseq: mode sequence starting from this state to target state, a list of 0-indexed numbers
+        """
+        self.x = x
+        self.modeseq = modeseq
+        self.G = G
+
 class Domain:
 	def __init__(self, A, b):
 		self.A = A

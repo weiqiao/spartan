@@ -19,8 +19,8 @@ import pickle
 # derived from example 12.
 # different from example 12: 
 # Add omega as state, and its velocity v_omega is a control
-# states [x,y,theta,xdot,ydot,thetadot,omega]
-# inputs [F1, F1t, F2, F2t, Fn, Ft, phi, vomega]
+# states [x,y,theta,xdot,ydot,thetadot,phi,omega]
+# inputs [F1, F1t, F2, F2t, Fn, Ft, vphi, vomega]
 
 DynamicsConstraintEps = 0.00001
 PositionConstraintEps = 0.01
@@ -33,8 +33,9 @@ mass = 0.006565
 inertia = (np.pi/4-8/(9*np.pi))*(2*mass*r**2/np.pi)
 DistanceCentroidToCoM = 4*r/(3*np.pi)
 MaxInputForce = 100
+PhiChangeMax = np.pi*2./180.
 MaxRelVel = 0.005
-StateBound = np.array([[-4,-1,-np.pi,-2,-2,-2,0.],[4,1,np.pi,2,2,2,0.1]])
+StateBound = np.array([[-4.,-1.,-np.pi,-2.,-2.,-2.,np.pi*5./12.,0.],[4.,1.,np.pi,2.,2.,2.,np.pi*2./3.,0.1]])
 OptimizationSlackEps = 0.01
 VISUALIZE = 1
 USE_GOOD_INITIAL_GUESS = 0 
@@ -48,27 +49,28 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 		T,dt = params
 		T = int(T)
 		n = len(pos_init)
-		
+		nx = 8
+		nu = 8
 
-		# F = [F1, F1t, F2, F2t, Fn, Ft, phi, vomega]
+		# F = [F1, F1t, F2, F2t, Fn, Ft, vphi, vomega]
 		# F1t: friction of finger 1 in positive (roughly x) direction
 		# F2t: friction of finger 2 in positive (roughly y) direction
-		F = self.NewContinuousVariables(8,'F_%d' % 0) 
+		F = self.NewContinuousVariables(nu,'F_%d' % 0) 
 		F_over_time = F
 		for t in range(1,T+1):
-			F = self.NewContinuousVariables(8,'F_%d' % t) 
+			F = self.NewContinuousVariables(nu,'F_%d' % t) 
 			F_over_time = np.vstack((F_over_time,F)) 
 
-		pos = self.NewContinuousVariables(7, 'pos_%d' % 0) # pos = [x, y, theta, x_dot, y_dot, theta_dot, omega]
+		pos = self.NewContinuousVariables(nx, 'pos_%d' % 0) # pos = [x, y, theta, x_dot, y_dot, theta_dot, phi, omega]
 		pos_over_time = pos
 		for t in range(1,T+1):
-			pos = self.NewContinuousVariables(7,'pos_%d' % t)
+			pos = self.NewContinuousVariables(nx,'pos_%d' % t)
 			pos_over_time = np.vstack((pos_over_time,pos))
 
 		for t in range(T):
-			x,y,theta,x_dot,y_dot,theta_dot, omega = pos_over_time[t,:]
-			x_next, y_next, theta_next, x_dot_next, y_dot_next, theta_dot_next, omega_next = pos_over_time[t+1,:]
-			F1, F1t, F2, F2t, Fn, Ft, phi, vomega = F_over_time[t,:]
+			x,y,theta,x_dot,y_dot,theta_dot, phi, omega = pos_over_time[t,:]
+			x_next, y_next, theta_next, x_dot_next, y_dot_next, theta_dot_next, phi_next, omega_next = pos_over_time[t+1,:]
+			F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F_over_time[t,:]
 			
 			# position update constraints
 			self.AddLinearConstraint(x_next - (x+x_dot*dt) <= DynamicsConstraintEps)
@@ -77,6 +79,8 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(y_next - (y+y_dot*dt) >= -DynamicsConstraintEps)
 			self.AddLinearConstraint(theta_next - (theta+theta_dot*dt) <= DynamicsConstraintEps)
 			self.AddLinearConstraint(theta_next - (theta+theta_dot*dt) >= -DynamicsConstraintEps)
+			self.AddLinearConstraint(phi_next - (phi + vphi*dt) <= DynamicsConstraintEps)
+			self.AddLinearConstraint(phi_next - (phi + vphi*dt) >= -DynamicsConstraintEps)
 			self.AddLinearConstraint(omega_next - (omega+vomega*dt) <= DynamicsConstraintEps)
 			self.AddLinearConstraint(omega_next - (omega+vomega*dt) >= -DynamicsConstraintEps)
 			
@@ -134,7 +138,7 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddConstraint(d*sym.sin(phi-theta)+r-omega >= -DynamicsConstraintEps)
 
 			# state bounds
-			for i in range(7):
+			for i in range(nx):
 				self.AddLinearConstraint(pos_over_time[t,i] >= StateBound[0,i])
 				self.AddLinearConstraint(pos_over_time[t,i] <= StateBound[1,i])
 
@@ -147,29 +151,19 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearConstraint(Fn <= MaxInputForce)
 			self.AddLinearConstraint(phi >= theta)
 			self.AddLinearConstraint(phi - theta <= np.pi/2)
-			self.AddLinearConstraint(phi >= np.pi*5/12)
-			self.AddLinearConstraint(phi <= np.pi*2/3)
+			# self.AddLinearConstraint(phi >= np.pi*5/12)
+			# self.AddLinearConstraint(phi <= np.pi*2/3)
 			self.AddLinearConstraint(vomega <= 0.5)
 			self.AddLinearConstraint(vomega >= -0.5)
+			self.AddLinearConstraint(vphi * dt <= PhiChangeMax)
+			self.AddLinearConstraint(vphi * dt >= -PhiChangeMax)
 
-			# phi shouldn't change too much
-			PhiChangeMax = np.pi*2/180
-			PhiChangeMin = np.pi*0.3/180
-			if t > 0:
-				phi_prev = F_over_time[t-1,-2]
-				self.AddLinearConstraint(phi-phi_prev <= PhiChangeMax)
-				self.AddLinearConstraint(phi_prev-phi <= PhiChangeMax)
-				#self.AddConstraint((phi-phi_prev)*(phi-phi_prev) >= PhiChangeMin**2)
 			if t == T-1:
 				self.AddLinearConstraint(phi - pos_final[2] <= DynamicsConstraintEps)
-			# if t == 0:
-			# 	self.AddLinearConstraint(phi <= np.pi/2.0+2.0/180.0*np.pi)
-			# 	self.AddLinearConstraint(phi >= np.pi/2.0-2.0/180.0*np.pi)
 
-			if t > 0:
-				theta_prev = pos_over_time[t-1,2]
-				self.AddLinearConstraint(theta - theta_prev >= 0)
-
+			# if t > 0:
+				# theta_prev = pos_over_time[t-1,2]
+			self.AddLinearConstraint(theta_dot >= 0)
 
 			# the right finger does not touch the ground
 			y_centroid = y + DistanceCentroidToCoM*sym.cos(theta)
@@ -180,13 +174,12 @@ class TrajectoryOptimization(mp.MathematicalProgram):
 			self.AddLinearCost((phi-theta))
 
 		# initial state constraint
-		for i in range(n):
+		for i in range(6):
 			self.AddLinearConstraint(pos_over_time[0,i]==pos_init[i])
 		# final state constraint
-		for i in range(n):
+		for i in range(nx):
 			self.AddLinearConstraint(pos_over_time[-1,i]==pos_final[i])
 					
-
 		# initial guess
 		if USE_GOOD_INITIAL_GUESS:
 			pass 
@@ -248,9 +241,8 @@ def vertices(X,N=50):
 
 def draw_force(ax,X,F):
 	force_scaling_factor = 0.01 # TODO
-	x,y,theta=X[:3]
-	omega = X[6]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F[:7]
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)
@@ -311,9 +303,8 @@ def draw_left_finger(ax, X, F):
 	Width = 0.008 # TODO
 	Length = .1 # TODO
 
-	x,y,theta=X[:3]
-	omega = X[6]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F[:7]
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)
@@ -331,9 +322,8 @@ def draw_right_finger(ax, X, F):
 	Width = 0.008 # TODO
 	Length = .1 # TODO
 
-	x,y,theta=X[:3]
-	omega = X[6]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F[:7]
+	x,y,theta,x_dot,y_dot,theta_dot, phi, omega = X
+	F1, F1t, F2, F2t, Fn, Ft, vphi, vomega = F
 
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)
@@ -356,12 +346,12 @@ if __name__=="__main__":
 
 	prog1 = TrajectoryOptimization()
 	params = np.array([T,dt])
-	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0])
+	pos_init = np.array([0,r-DistanceCentroidToCoM,0,0,0,0,0])
 	theta_final = np.pi/2.0
 	d_final = 0.018 # 0.012 also works, took 22 sec to solve
 	phi_final = np.pi/2.0
 	omega_final = d*np.sin(phi_final-theta_final)+r
-	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0,0,0,omega_final])
+	pos_final = np.array([DistanceCentroidToCoM*np.sin(theta_final)-r*theta_final,r-DistanceCentroidToCoM*np.cos(theta_final),theta_final,0.,0.,0.,theta_final,omega_final])
 	initial_guess = {}
 	pos_over_time_var, F_over_time_var = prog1.add_dynamics_constraints(params, pos_init, pos_final)
 	solver = IpoptSolver()
@@ -392,7 +382,7 @@ if __name__=="__main__":
 			DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel]))
 		params_save = np.append(params_save,StateBound[0,:])
 		params_save = np.append(params_save,StateBound[1,:])
-		phi_init = F_over_time[0,6]
+		phi_init = pos_over_time[0,6]
 		theta_init = pos_over_time[0,2]
 		omega_init = d*np.sin(phi_init - theta_init) + r
 		pos_init = np.append(pos_init, omega_init)
