@@ -47,3 +47,4 @@ if __name__ == "__main__":
 	for t in range(N):
 		print(tree_states[t].x)
 		print(tree_states[t].modeseq)
+		print(tree_states[t].tf)

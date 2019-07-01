@@ -323,7 +323,7 @@ if __name__ == '__main__':
 		min_cost = None
 		min_cost_idx = None
 		# try closest goal states
-		for tj in range(-10,11):
+		for tj in range(-30,30):
 			tf = np.maximum(np.minimum(t0+tj, T),0)
 			x_goal = pos_over_time[tf,:]
 
@@ -370,7 +370,7 @@ if __name__ == '__main__':
 
 		x_save = x_s 
 		for t in range(TT):
-			tree_states.append(TreeStates(x_save, mode_seq[t:]))
+			tree_states.append(TreeStates(x_save, mode_seq[t:], tf))
 			# update state
 			x_save = np.zeros(nx)
 			for kk in range(nx):

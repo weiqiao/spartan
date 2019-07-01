@@ -27,13 +27,14 @@ class AffineSystem(object):
         self.nx, self.nu = B.shape
 
 class TreeStates:
-    def __init__(self, x, modeseq, G=None):
+    def __init__(self, x, modeseq, tf=None, G=None):
         """
         x: state
         modeseq: mode sequence starting from this state to target state, a list of 0-indexed numbers
         """
         self.x = x
         self.modeseq = modeseq
+        self.tf = tf
         self.G = G
 
 class Domain:

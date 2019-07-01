@@ -41,6 +41,7 @@ VISUALIZE = 1
 USE_GOOD_INITIAL_GUESS = 0 
 SAVE_STATE_AND_CONTROL = 1
 d = 0.018 # hard code
+dt = 0.01 
 
 def pnnls(A, B, c):
     """
@@ -232,11 +233,64 @@ def get_back_controller2(cur_linear_cell,x,cur_phi,x_ref,G,G_inv):
 	#assert(1 == 0)
 	return res.x[:m], res.x[m:m+n], res.x[2*n+m]
 
-def get_back_controller3(cur_linear_cell,x,cur_phi,x_ref,G,G_inv,params=None):
+def mpc_qp(sys, x0, P, Q, R, x_ref, X_N=None):
+	"""
+	sys is a list of tuples (A,B,c)
+	"""
+	T = len(sys)
+	nx, nu = sys[0].B.shape
+	nvars = (nx + nu) * T
+	# vars = [x1,x2,...,xt|u0,u1,...,u(t-1)]
+	A_eq = np.hstack((np.eye(nx), np.zeros((nx,nx*(T-1))), -sys[0].B, np.zeros((nx,nu*(T-1)))))
+	b_eq = sys[0].A.dot(x0) + sys[0].c # 1-dim vector
+	for t in range(1,T):
+		A_eq1 = np.zeros((nx, (nx+nu)*T))
+		A_eq1[:, nx*(t-1) : nx*t] = -sys[t].A 
+		A_eq1[:, nx*t : nx*(t+1)] = np.eye(nx)
+		A_eq1[:, nx*T+nu*t : nx*T+nu*(t+1)] = -sys[t].B
+		b_eq1 = sys[t].c
+		A_eq = np.vstack((A_eq,A_eq1))
+		b_eq = np.hstack((b_eq,b_eq1))
+	if X_N != None:
+		A_ineq = np.zeros((X_N.A.shape[0], (nx+nu)*T))
+		A_ineq[:, nx*(T-1):nx*T] = X_N.A
+		bu_ineq = X_N.b
+		bl_ineq = -np.inf*np.ones(len(bu_ineq))
+	else:
+		A_ineq = []
+		bu_ineq = []
+		bl_ineq = []
+	# 
+	P_mat = np.zeros((nvars,nvars))
+	for t in range(T-1):
+		P_mat[nx*t : nx*(t+1), nx*t : nx*(t+1)] = Q 
+	P_mat[nx*(T-1) : nx*T, nx*(T-1) : nx*T] = P 
+	for t in range(T):
+		P_mat[nx*T+nu*t : nx*T+nu*(t+1), nx*T+nu*t : nx*T+nu*(t+1)] = R
+	q_mat = np.zeros(nvars)
+	for t in range(T-1):
+		q_mat[nx*t : nx*(t+1)] = -2.0*Q.dot(x_ref)
+	q_mat[nx*(T-1) : nx*T] = -2.0*P.dot(x_ref)
+	
+	P_mat = sparse.csc_matrix(P_mat)
+	if A_ineq != []:
+		A = sparse.csc_matrix(np.vstack((A_eq,A_ineq)))
+	else:
+		A = sparse.csc_matrix(A_eq)
+	prob = osqp.OSQP()
+	if A_ineq != []:
+		prob.setup(P_mat, q_mat, A, np.hstack((b_eq,bl_ineq)), np.hstack((b_eq,bu_ineq)), alpha = 1.0)
+	else:
+		prob.setup(P_mat, q_mat, A, b_eq, b_eq, alpha = 1.0)
+	res = prob.solve()
+	print(res.info.status)
+	return res.x[nx*T:nx*T+nu]
+
+def get_back_controller3(cur_linear_cell,x,x_ref,G,params=None):
 	# solve LP using osqp
 	# cur_linear_cell: current linear cell
 	# x: current state
-	# f(x,u) + delta = Ax+Bu+c+delta is x_ref
+	# f(x,u) + delta = Ax+Bu+c+delta == x_ref
 	# want to minimize the delta corresponds to theta
 	A = cur_linear_cell.A 
 	B = cur_linear_cell.B
@@ -246,24 +300,25 @@ def get_back_controller3(cur_linear_cell,x,cur_phi,x_ref,G,G_inv,params=None):
 	h = p.h 
 	n = len(x)
 	m = int(B.shape[1])
+	nw = 3 # theta (2), phi (6), omega (7) 
 	#print("n=%d,m=%d"%(n,m))
-	# t = [u_1,...,u_m|delta_1,...,delta_n|p_1,...,p_n|w]
-	A_eq1 = np.hstack((B,np.eye(n),-G,np.zeros((n,1))))
+	# t = [u_1,...,u_m|delta_1,...,delta_n|p_1,...,p_n|w_1,w_2,w_3]
+	A_eq1 = np.hstack((B,np.eye(n),-G,np.zeros((n,nw))))
 	c = c[:,0]
 	x_ref = x_ref[:,0]
 	b_eq1 = -A.dot(x)-c+x_ref
 
-	# pi <= eps
-	A_ub1 = np.hstack((np.zeros((n,m+n)),np.eye(n),np.zeros((n,1))))
-	# b_ub1 = np.ones(n)*EPS
-	b_ub1 = np.ones(n)
+	# p_i <= eps
+	A_ub1 = np.hstack((np.zeros((n,m+n)),np.eye(n),np.zeros((n,nw))))
+	b_ub1 = np.ones(n)*EPS
+	# b_ub1 = np.ones(n)
 
 	#print("constraint 1", A_ub1.shape, b_ub1.shape)
 
-	# -eps <= pi
-	A_ub2 = np.hstack((np.zeros((n,m+n)),-np.eye(n),np.zeros((n,1))))
-	# b_ub2 = np.ones(n)*EPS
-	b_ub2 = np.ones(n)
+	# -eps <= p_i
+	A_ub2 = np.hstack((np.zeros((n,m+n)),-np.eye(n),np.zeros((n,nw))))
+	b_ub2 = np.ones(n)*EPS
+	# b_ub2 = np.ones(n)
 
 	# # delta <= w
 	# A_ub3 = np.hstack((np.zeros((n,m)),np.eye(n),np.zeros((n,n)),-np.ones((n,1))))
@@ -273,42 +328,83 @@ def get_back_controller3(cur_linear_cell,x,cur_phi,x_ref,G,G_inv,params=None):
 	# A_ub4 = np.hstack((np.zeros((n,m)),-np.eye(n),np.zeros((n,n)),-np.ones((n,1))))
 	# b_ub4 = np.zeros(n)
 
-	# delta <= w
-	A_ub3 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),-np.ones((1,1))))
-	A_ub3[0,m+2] = 1
-	b_ub3 = np.zeros(1)
-
+	# delta(theta) <= w
+	A_ub3_1 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub3_1[0,m+2] = 1
+	A_ub3_1[0,-3] = -1
+	b_ub3_1 = np.zeros(1)
 	# -delta <= w
-	A_ub4 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),-np.ones((1,1))))
-	A_ub4[0,m+2] = -1
-	b_ub4 = np.zeros(1)
+	A_ub3_2 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub3_2[0,m+2] = -1
+	A_ub3_2[0,-3] = -1
+	b_ub3_2 = np.zeros(1)
 
-	num_constraints = H.shape[0]
-	A_ub5 = np.zeros((num_constraints,2*n+m+1))
-	A_ub5[:,:m] = H[:,n:]
-	b_ub5 = (-H[:,:n].dot(x) + h + EPS)[:,0]
-	# row 13
-	A_ub5 = np.delete(A_ub5,[12,14],0) 
-	b_ub5 = np.delete(b_ub5,[12,14],0)
+	A_ub3 = np.vstack((A_ub3_1,A_ub3_2))
+	b_ub3 = np.hstack((b_ub3_1,b_ub3_2))
 
-	# phi cannot change too much
-	# phi <= cur_phi + 1.0/180.0*np.pi
-	# -phi <= -(cur_phi - 1.0/180.0*np.pi)
-	prob_dim = 2*n+m+1
-	A_ub6 = np.zeros((2,prob_dim))
-	A_ub6[0,m-1] = 1
-	A_ub6[1,m-1] = -1
-	b_ub6 = np.array([cur_phi+2.0/180.0*np.pi, -(cur_phi - 2.0/180.0*np.pi)])
+	A_ub4_1 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub4_1[0,m+6] = 1
+	A_ub4_1[0,-2] = -1
+	b_ub4_1 = np.zeros(1)
 
-	#print("constraint 3", A_ub3.shape, b_ub3.shape)
-	# A_ub_origin = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4,A_ub5,A_ub6,A_eq1,-A_eq1))
-	# b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4,b_ub5,b_ub6,b_eq1,-b_eq1))
-	#A_ub_origin = np.delete(A_ub_origin,[34,36,39,40],0)
-	#b_ub = np.delete(b_ub,[34,36,39,40],0)
+	A_ub4_2 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub4_2[0,m+6] = -1
+	A_ub4_2[0,-2] = -1
+	b_ub4_2 = np.zeros(1)
 
-	A_ub_origin = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4,A_ub6,A_eq1,-A_eq1))
-	b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4,b_ub6,b_eq1,-b_eq1))
+	A_ub4_3 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub4_3[0,m+7] = 1
+	A_ub4_3[0,-1] = -1 
+	b_ub4_3 = np.zeros(1)
+	
+	A_ub4_4 = np.hstack((np.zeros((1,m)),np.zeros((1,n)),np.zeros((1,n)),np.zeros((1,nw))))
+	A_ub4_4[0,m+7] = -1
+	A_ub4_4[0,-1] = -1
+	b_ub4_4 = np.zeros(1)
 
+	A_ub4 = np.vstack((A_ub4_1,A_ub4_2,A_ub4_3,A_ub4_4))
+	b_ub4 = np.hstack((b_ub4_1,b_ub4_2,b_ub4_3,b_ub4_4))
+
+	# A_ub4 = np.vstack((A_ub4_3,A_ub4_4))
+	# b_ub4 = np.hstack((b_ub4_3,b_ub4_4))
+
+	# ## (H,h) constraints
+	# num_constraints = H.shape[0]
+	# A_ub5 = np.zeros((num_constraints,2*n+m+1))
+	# A_ub5[:,:m] = H[:,n:]
+	# b_ub5 = (-H[:,:n].dot(x) + h + EPS)[:,0]
+	# # row 13
+	# A_ub5 = np.delete(A_ub5,[12,14],0) 
+	# b_ub5 = np.delete(b_ub5,[12,14],0)
+
+	# # phi cannot change too much
+	# # phi <= cur_phi + 1.0/180.0*np.pi
+	# # -phi <= -(cur_phi - 1.0/180.0*np.pi)
+	prob_dim = 2*n+m+nw
+	# A_ub6 = np.zeros((2,prob_dim))
+	# A_ub6[0,m-1] = 1
+	# A_ub6[1,m-1] = -1
+	# b_ub6 = np.array([cur_phi+2.0/180.0*np.pi, -(cur_phi - 2.0/180.0*np.pi)])
+
+	# inputs [F1, F1t, F2, F2t, Fn, Ft, vphi, vomega]
+	A_ub6_1 = np.zeros((1,m+2*n+1))
+	A_ub6_1[0,6] = dt
+	b_ub6_1 = 1.0/180.0*np.pi 
+	A_ub6_2 = np.zeros((1,m+2*n+1))
+	A_ub6_2[0,6] = -dt
+	b_ub6_2 = -1.0/180.0*np.pi 
+	A_ub6_3 = np.zeros((1,m+2*n+1))
+	A_ub6_3[0,7] = 1.
+	b_ub6_3 = 0.5 
+	A_ub6_4 = np.zeros((1,m+2*n+1))
+	A_ub6_4[0,7] = -1.
+	b_ub6_4 = -0.5 
+
+	A_ub6 = np.vstack((A_ub6_1,A_ub6_2,A_ub6_3,A_ub6_4))
+	b_ub6 = np.hstack((b_ub6_1,b_ub6_2,b_ub6_3,b_ub6_4))
+
+	A_ub_origin = np.vstack((A_ub1,A_ub2,A_ub3,A_ub4,A_eq1,-A_eq1))
+	b_ub = np.hstack((b_ub1,b_ub2,b_ub3,b_ub4,b_eq1,-b_eq1))
 
 	A_ub = sparse.csc_matrix(A_ub_origin)
 	b_lb = -np.inf*np.ones(len(b_ub))
@@ -319,6 +415,8 @@ def get_back_controller3(cur_linear_cell,x,cur_phi,x_ref,G,G_inv,params=None):
 	P = np.zeros((prob_dim,prob_dim))
 	P = sparse.csc_matrix(P)
 	q = np.zeros(prob_dim)
+	q[prob_dim-3] = 1
+	q[prob_dim-2] = 1
 	q[prob_dim-1] = 1
 	#print("A upper bound")
 	#print(A_ub)
@@ -621,6 +719,49 @@ def get_back_controller_linprog(cur_linear_cell,x,x_ref,G,G_inv):
     print(res.x)
     return res.x[:m], res.x[m:m+n], res.x[2*n+m]
 
+def weightedL2Square(a,b,w):
+    q = a-b
+    return (w*q*q).sum()
+
+def closest_state(_x):
+	weight = np.array([1.,1.,20.,.01,.01,.01,20.,5.])
+
+	file_name = "trajopt_example15_latest"
+	state_and_control = pickle.load(open(file_name + ".p","rb"))
+	pos_over_time = state_and_control["state"]
+	F_over_time = state_and_control["control"]
+	params = state_and_control["params"]
+
+	idx = int(params[0])
+	T = int(params[idx+33])
+	min_cost = None
+	min_idx = None
+	for t in range(T):
+		xt = pos_over_time[t,:]
+		cur_cost = weightedL2Square(_x,xt,weight)
+		if min_cost == None or cur_cost < min_cost:
+			min_cost = cur_cost
+			min_idx = t
+
+	tree_states_read = pickle.load(open(file_name+"_tree_states.p","rb"))
+	tree_states = tree_states_read["tree_states"]
+	N = len(tree_states)
+	min_cost2 = None
+	min_idx2 = None 
+	for t in range(N):
+		xt = tree_states[t].x
+		cur_cost2 = weightedL2Square(_x,xt,weight)
+		if min_cost2 == None or cur_cost2 < min_cost2:
+			min_cost2 = cur_cost2
+			min_idx2 = t 
+
+	state_type = 0 # 0 for trajectory states, 1 for tree states
+	if min_cost < min_cost2:
+		return min_idx, state_type
+	else:
+		state_type = 1
+		return min_idx2, state_type
+
 def run():
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
@@ -631,7 +772,7 @@ def run():
 	global DistanceCentroidToCoM
 	global r
 	m, I, DistanceCentroidToCoM, r, dt, DynamicsConstraintEps,PositionConstraintEps,mu_ground,mu_finger,MaxInputForce,MaxRelVel = params[1:idx+1] # mass, inertia
-	T = int(params[idx+25])
+	T = int(params[idx+33])
 
 	# load linearization
 	polytube_controller = pickle.load(open("trajopt_example15_latest"+"_tube_output.p","rb"))
@@ -664,140 +805,68 @@ def run():
 			theta_stack = np.vstack((theta_stack, polytube_controller_theta[i]))
 
 	__ = 100 # total time steps
-	## sanity check
-	# for t in range(__):
-	# 	print('t=%d'%t)
-	# 	print('x=',pos_over_time[t,:])
-	# 	print('u=',F_over_time[t,:])
 	init_state = pos_over_time[0,:]
 	init_state[2] = 10.0*np.pi/180.0
 	init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
 	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
 	cur_x = init_state
-	init_phi = F_over_time[0,-1]
-	cur_phi = init_phi
+	cur_phi = cur_x[-2]
 	for t in range(__):
-		# print('t=%d,angle=%f'%(t,cur_x[2]/np.pi*180.0))
-		# # get current controller
-		# cur_x = cur_x.reshape((-1,1))
-		# print('cur_x=',cur_x)
-		# cur_x_stack = np.tile(cur_x,(l,1)) # equivalent to repmat
-		# print('cur_x_stack=',cur_x_stack)
-		# px = G_inv_stack.dot(cur_x_stack-x_stack)
-		# print('px=',px)
-		# px_star = np.maximum(np.minimum(px,1),-1)
-		# print('px_star=',px_star)
-		# d_signed = G_stack.dot(px-px_star)
-		# print('d_signed=',d_signed)
-		# d_signed = d_signed.reshape((l,n))
-		# print('d_signed=',d_signed)
-		# d = np.linalg.norm(d_signed,axis = 1)
-		# print('d=',d)
-		# idx_min = np.argmin(d)
-		# print('idx_min=',idx_min)
-		# d_min = d[idx_min]
-		# print('d_min=',d_min)
-		# if d_min > 0:
-		# 	idx_min += 1 # the child of the node
-		# 	print('idx_min=%d'%idx_min)
-		# 	cur_linear_cell = polytube_controller_list_of_cells[idx_min] # linear_cell(A,B,c,polytope(H,h))
-		# 	cur_u_lin, cur_delta = get_back_controller(cur_linear_cell,cur_x,polytube_controller_x[idx_min],polytube_controller_G[idx_min],polytube_controller_G_inv[idx_min])
-		# 	print('cur_u_lin=',cur_u_lin)
-		# 	print('cur_delta=',cur_delta)
-		# 	next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin).reshape((-1,1)) + cur_linear_cell.c)[:,0]
-		# 	print('next_x_lin=',next_x_lin)
-		# else:
-		# 	# inside nearest polytope, use polytopic control law
-		# 	cur_u_lin = polytube_controller_u[idx_min]
-		# 	print('cur_u_lin=',cur_u_lin)
-		# 	cur_linear_cell = polytube_controller_list_of_cells[idx_min] # linear_cell(A,B,c,polytope(H,h))
-		# 	next_x_lin = cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c
-		# 	print('next_x_lin=',next_x_lin)
-		
-		#cur_x = cur_x.reshape((-1,1))
 		idx_min = -1
 		w_min = None
+
+		idx_min, state_type = closest_state(cur_x)
+		print('idx_min=%d,state type=%d'%(idx_min,state_type))
 		for idx in range(0,T):
 			#print('idx=%d'%idx)
 			cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
-			cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,cur_phi,polytube_controller_x[idx],polytube_controller_G[idx],polytube_controller_G_inv[idx])
+			cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx])
 			if w_min == None or cur_w < w_min:
 				idx_min = idx
 				u_lin_min = cur_u_lin
 				w_min = cur_w
 		assert(idx_min > -1)
 		EPS = 1e-6
-		if idx_min >= T - 1:
-			print('success')
-		print('t=%d'%t)
-		print('idx=%d'%idx_min)
-		if w_min < EPS: # inside nearest polytope, use polytopic control law
-			cur_u_lin = polytube_controller_u[idx_min]
-			cur_idx = idx_min
-		else:
-			cur_idx = min(T-1,idx_min+1)
-			print('cur_idx=%d'%cur_idx)
-			cur_linear_cell = polytube_controller_list_of_cells[cur_idx] # linear_cell(A,B,c,polytope(H,h))
-			cur_u_lin, cur_delta, cur_w, res_info = get_back_controller3(cur_linear_cell,cur_x,cur_phi,polytube_controller_x[cur_idx],polytube_controller_G[cur_idx],polytube_controller_G_inv[cur_idx],1)
-			if res_info != 'solved':
-				print('bad happened')
-				#return
-		if cur_u_lin.shape == (8,1):
-			cur_u_lin = cur_u_lin[:,0]
-		# print('cur_idx')
-		# print(cur_idx)
-		# print('cur_x')
-		# print(cur_x)
-		cur_linear_cell = polytube_controller_list_of_cells[cur_idx]
-		# print('A')
-		# print(cur_linear_cell.A)
-		# print('B')
-		# print(cur_linear_cell.B)
-		# print('c')
-		# print(cur_linear_cell.c)
-		next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
-		# print('cur_u_lin')
-		# print(cur_u_lin)
-		# print('ref_u')
-		# print(F_over_time[t])
-		# print('next_x_lin')
-		# print(next_x_lin)
-		# print('next_ref_x')
-		# print(pos_over_time[cur_idx+1])
+		if state_type != 10: # trajectory states
+			if idx_min >= T - 1:
+				print('success')
+			print('t=%d'%t)
+			print('idx=%d'%idx_min)
+			if w_min < EPS: # inside nearest polytope, use polytopic control law
+				cur_u_lin = polytube_controller_u[idx_min]
+				cur_idx = idx_min
+			else:
+				cur_idx = min(T-1,idx_min+1) # aim for the child
+				print('cur_idx=%d'%cur_idx)
+				cur_linear_cell = polytube_controller_list_of_cells[cur_idx] # linear_cell(A,B,c,polytope(H,h))
+				cur_u_lin, cur_delta, cur_w, res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[cur_idx],polytube_controller_G[cur_idx],1)
+				if res_info != 'solved':
+					print('bad happened')
+					#return
+			print('length=%f'%len(cur_u_lin.shape))
+			if int(len(cur_u_lin.shape)) == 2:
+				cur_u_lin = cur_u_lin[:,0]
+			cur_linear_cell = polytube_controller_list_of_cells[cur_idx]
+			next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
+			# A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
+			# next_x_lin2 = (A.dot(cur_x) + B.dot(cur_u_lin) + c[:,0])
+			visualize(cur_x,cur_u_lin,t)
+			cur_x = next_x_lin
+			cur_phi = cur_x[-2]
+			cur_x[2] = min(cur_x[2],cur_phi)
+			cur_x[0] = DistanceCentroidToCoM*np.sin(cur_x[2])-r*cur_x[2]
+			cur_x[1] = r - DistanceCentroidToCoM*np.cos(cur_x[2])
+			if cur_idx >= T-1:
+				break
 
-		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		next_x_lin2 = (A.dot(cur_x) + B.dot(cur_u_lin) + c[:,0])
-		# print('next_x_lin2')
-		# print(next_x_lin2)
-		visualize(cur_x,cur_u_lin,t)
-		cur_x = next_x_lin
-		cur_phi = cur_u_lin[6]
-		cur_x[2] = min(cur_x[2],cur_phi)
-		cur_x[0] = DistanceCentroidToCoM*np.sin(cur_x[2])-r*cur_x[2]
-		cur_x[1] = r - DistanceCentroidToCoM*np.cos(cur_x[2])
-		## cur_x[3:] = 0 # approximation, same to real case
-		# print('polytube controller 0')
-		# print(polytube_controller_u[0])
-		# print('polytube controller 1')
-		# print(polytube_controller_u[1])
-		# print('cur u lin')
-		# print(cur_u_lin)
-		# print('next_x_lin')
-		# print(next_x_lin)
-		# print('polytube_controller_x[1]')
-		# print(polytube_controller_x[1])
-		# print('cur_phi=%f'%cur_phi)
-		if cur_idx >= T-1:
-			break
-
-		# manually insert disturbance
-		if t == 30:
-			init_state = pos_over_time[0,:]
-			init_state[2] = 10.0*np.pi/180.0
-			init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
-			init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
-			cur_x = init_state
-	visualize(cur_x,cur_u_lin,t)
+			# # manually insert disturbance
+			# if t == 30:
+			# 	init_state = pos_over_time[0,:]
+			# 	init_state[2] = 10.0*np.pi/180.0
+			# 	init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
+			# 	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
+			# 	cur_x = init_state
+			visualize(cur_x,cur_u_lin,t)
     	
 
 def visualize(X,F,t):
@@ -816,7 +885,7 @@ def visualize(X,F,t):
     ax1.set_title("carrot %d"%t)
     ax1.plot([-12,12],[0,0],'black')
     ax1.plot(X[0],X[1],'+',color=(1,0,0))# draw CoM
-    #draw_force(ax1,X,F) # draw forces
+    draw_force(ax1,X,F) # draw forces
     draw_left_finger(ax1,X,F)
     draw_right_finger(ax1,X,F)
     t += 1
@@ -838,7 +907,8 @@ def vertices(X,N=50):
 def draw_force(ax,X,F):
 	force_scaling_factor = 0.01 # TODO
 	x,y,theta=X[:3]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F
+	phi = X[6]
+	F1, F1t, F2, F2t, Fn, Ft = F[:6]
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)
 
@@ -873,13 +943,13 @@ def draw_force(ax,X,F):
 	ax.arrow(x_Ft,y_Ft,dx_Ft,dy_Ft,color=(1,0,1),head_width=0.0005, head_length=0.001)
 	ax.arrow(x_G,y_G,dx_G,dy_G,color=(1,0,1),head_width=0.0005, head_length=0.001)
 
-
 def draw_left_finger(ax, X, F):
 	Width = 0.008 # TODO
 	Length = .1 # TODO
 
 	x,y,theta=X[:3]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F
+	phi = X[6]
+	F1, F1t, F2, F2t, Fn, Ft = F[:6]
 
 	omega = d*np.sin(phi-theta)+r
 
@@ -901,9 +971,11 @@ def draw_right_finger(ax, X, F):
 	Length = .1 # TODO
 
 	x,y,theta=X[:3]
-	F1, F1t, F2, F2t, Fn, Ft, phi = F
+	phi = X[6]
+	F1, F1t, F2, F2t, Fn, Ft = F[:6]
 
-	omega = d*np.sin(phi-theta)+r
+	#omega = d*np.sin(phi-theta)+r
+	omega = X[7]
 
 	x_centroid = x - DistanceCentroidToCoM*np.sin(theta)
 	y_centroid = y + DistanceCentroidToCoM*np.cos(theta)

@@ -183,11 +183,6 @@ def polytopic_trajectory_given_modes(x0,list_of_cells,goal,eps=0,order=1,scale=[
         u_num.append(np.array([u[t,:]]).reshape(m,1))
     return (x_num,u_num,G_num,theta_num)
 
-
-
-
-
-
 def polytopic_trajectory(system,x0,list_of_goal_polytopes,T,eps=0.1):
     """
     Description: Polytopic Trajectory Optimization
