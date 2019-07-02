@@ -7,6 +7,7 @@ d = 0.018
 
 # mode 2: left finger in contact, right finger not in contact
 # F2 and F2t disappear
+# NOTE: c is 2-d array
 
 nx = 8
 nu = 8

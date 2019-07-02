@@ -8,6 +8,7 @@ from pypolycontain.lib.polytope import polytope
 from pypolycontain.lib.zonotope import zonotope
 
 import carrot_pwa_15_mode1 as calin1 
+import carrot_pwa_15_mode2 as calin2 
 import poly_trajectory_15 as polytraj 
 from pwa_system import system, linear_cell
 import pickle
@@ -35,15 +36,15 @@ if __name__=="__main__":
 	T = int(params[idx+33])
 	t0 = 0
 	list_of_cells = []
+	pwa_cells = []
 	for t in range(t0,T):
 		A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
-		print('A',A)
-		print('B',B)
-		print('c',c)
-		list_of_cells.append(linear_cell(A,B,c,polytope(H,h)))
-		print(list_of_cells[t].A)
-		print(list_of_cells[t].B)
-		print(list_of_cells[t].c)
+		pwa1 = linear_cell(A,B,c,polytope(H,h))
+		list_of_cells.append(pwa1)
+		A2,B2,c2,H2,h2 = calin2.linearize(pos_over_time[t,:], F_over_time[t,:],params)
+		pwa2 = linear_cell(A2,B2,c2,polytope(H2,h2))
+		pwa_cells.append([pwa1, pwa2])
+
 
 	pos_init = pos_over_time[t0,:]
 	x0 = pos_init.reshape((-1,1))
@@ -63,5 +64,5 @@ if __name__=="__main__":
 
 
 	if SAVE_OUTPUT:
-		output = {"x": x, "u":u, "G": G, "theta": theta, "G_inv":G_inv, "list_of_cells":list_of_cells}
+		output = {"x": x, "u":u, "G": G, "theta": theta, "G_inv":G_inv, "list_of_cells":list_of_cells, "pwa_cells": pwa_cells}
 		pickle.dump( output, open(file_name+"_tube_output.p","wb"))

@@ -305,7 +305,8 @@ def get_back_controller3(cur_linear_cell,x,x_ref,G,params=None):
 	# t = [u_1,...,u_m|delta_1,...,delta_n|p_1,...,p_n|w_1,w_2,w_3]
 	A_eq1 = np.hstack((B,np.eye(n),-G,np.zeros((n,nw))))
 	c = c[:,0]
-	x_ref = x_ref[:,0]
+	if int(len(x_ref.shape)) == 2:
+		x_ref = x_ref[:,0]
 	b_eq1 = -A.dot(x)-c+x_ref
 
 	# p_i <= eps
@@ -723,25 +724,16 @@ def weightedL2Square(a,b,w):
     q = a-b
     return (w*q*q).sum()
 
-def closest_state(_x):
+def check_contact_mode(_x):
+	phi = _x[6]
+	theta = _x[2]
+	omega = d*np.sin(phi-theta)+r
+	if _x[7] > omega + 0.001:
+		return False
+	return True
+
+def closest_tree_state(_x):
 	weight = np.array([1.,1.,20.,.01,.01,.01,20.,5.])
-
-	file_name = "trajopt_example15_latest"
-	state_and_control = pickle.load(open(file_name + ".p","rb"))
-	pos_over_time = state_and_control["state"]
-	F_over_time = state_and_control["control"]
-	params = state_and_control["params"]
-
-	idx = int(params[0])
-	T = int(params[idx+33])
-	min_cost = None
-	min_idx = None
-	for t in range(T):
-		xt = pos_over_time[t,:]
-		cur_cost = weightedL2Square(_x,xt,weight)
-		if min_cost == None or cur_cost < min_cost:
-			min_cost = cur_cost
-			min_idx = t
 
 	tree_states_read = pickle.load(open(file_name+"_tree_states.p","rb"))
 	tree_states = tree_states_read["tree_states"]
@@ -754,19 +746,71 @@ def closest_state(_x):
 		if min_cost2 == None or cur_cost2 < min_cost2:
 			min_cost2 = cur_cost2
 			min_idx2 = t 
+	return min_idx2
 
-	state_type = 0 # 0 for trajectory states, 1 for tree states
-	if min_cost < min_cost2:
-		return min_idx, state_type
+def mpc_qp(sys, x0, P, Q, R, x_ref, X_N=None):
+	"""
+	sys is a list of tuples (A,B,c)
+	"""
+	T = len(sys)
+	nx, nu = sys[0].B.shape
+	nvars = (nx + nu) * T
+	# vars = [x1,x2,...,xt|u0,u1,...,u(t-1)]
+	A_eq = np.hstack((np.eye(nx), np.zeros((nx,nx*(T-1))), -sys[0].B, np.zeros((nx,nu*(T-1)))))
+	b_eq = sys[0].A.dot(x0) + sys[0].c[:,0] # 1-dim vector
+	for t in range(1,T):
+		A_eq1 = np.zeros((nx, (nx+nu)*T))
+		A_eq1[:, nx*(t-1) : nx*t] = -sys[t].A 
+		A_eq1[:, nx*t : nx*(t+1)] = np.eye(nx)
+		A_eq1[:, nx*T+nu*t : nx*T+nu*(t+1)] = -sys[t].B
+		b_eq1 = sys[t].c[:,0]
+		A_eq = np.vstack((A_eq,A_eq1))
+		b_eq = np.hstack((b_eq,b_eq1))
+	if X_N != None:
+		A_ineq = np.zeros((X_N.A.shape[0], (nx+nu)*T))
+		A_ineq[:, nx*(T-1):nx*T] = X_N.A
+		bu_ineq = X_N.b
+		bl_ineq = -np.inf*np.ones(len(bu_ineq))
 	else:
-		state_type = 1
-		return min_idx2, state_type
+		A_ineq = []
+		bu_ineq = []
+		bl_ineq = []
+	# 
+	P_mat = np.zeros((nvars,nvars))
+	for t in range(T-1):
+		P_mat[nx*t : nx*(t+1), nx*t : nx*(t+1)] = Q 
+	P_mat[nx*(T-1) : nx*T, nx*(T-1) : nx*T] = P 
+	for t in range(T):
+		P_mat[nx*T+nu*t : nx*T+nu*(t+1), nx*T+nu*t : nx*T+nu*(t+1)] = R
+	q_mat = np.zeros(nvars)
+	for t in range(T-1):
+		q_mat[nx*t : nx*(t+1)] = -2.0*Q.dot(x_ref)
+	q_mat[nx*(T-1) : nx*T] = -2.0*P.dot(x_ref)
+	
+	P_mat = sparse.csc_matrix(P_mat)
+	if A_ineq != []:
+		A = sparse.csc_matrix(np.vstack((A_eq,A_ineq)))
+	else:
+		A = sparse.csc_matrix(A_eq)
+	prob = osqp.OSQP()
+	if A_ineq != []:
+		prob.setup(P_mat, q_mat, A, np.hstack((b_eq,bl_ineq)), np.hstack((b_eq,bu_ineq)), alpha = 1.0)
+	else:
+		prob.setup(P_mat, q_mat, A, b_eq, b_eq, alpha = 1.0)
+	res = prob.solve()
+	print(res.info.status)
+	return res.x[nx*T:nx*T+nu]
+
 
 def run():
+	# load data
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	F_over_time = state_and_control["control"]
 	params = state_and_control["params"]
+
+	tree_states_read = pickle.load(open(file_name+"_tree_states.p","rb"))
+	tree_states = tree_states_read["tree_states"]
 
 	idx = int(params[0])
 	global DistanceCentroidToCoM
@@ -775,7 +819,7 @@ def run():
 	T = int(params[idx+33])
 
 	# load linearization
-	polytube_controller = pickle.load(open("trajopt_example15_latest"+"_tube_output.p","rb"))
+	polytube_controller = pickle.load(open(file_name+"_tube_output.p","rb"))
 	polytube_controller_x = polytube_controller['x']
 	polytube_controller_u = polytube_controller['u']
 	polytube_controller_G = polytube_controller['G']
@@ -783,56 +827,75 @@ def run():
 	polytube_controller_theta = polytube_controller['theta']
 	polytube_controller_list_of_cells = polytube_controller['list_of_cells']
 
-	print('sanity check')
-	sanity_check = 1
-	if sanity_check:
-		for i in range(T):
-			print('i=%d'%i)
-			print(polytube_controller_x[i].reshape((1,-1)))
-		# stack linearization matrices to simplify computation.
-		l = len(polytube_controller_u)
-		n = len(polytube_controller_x[0])
-		x_stack = polytube_controller_x[0]
-		u_stack = polytube_controller_u[0]
-		G_stack = polytube_controller_G[0]
-		G_inv_stack = polytube_controller_G_inv[0]
-		theta_stack = polytube_controller_theta[0]
-		for i in range(1,l):
-			x_stack = np.vstack((x_stack, polytube_controller_x[i]))
-			u_stack = np.vstack((u_stack, polytube_controller_u[i]))
-			G_stack = scipy.linalg.block_diag(G_stack, polytube_controller_G[i])
-			G_inv_stack = scipy.linalg.block_diag(G_inv_stack, polytube_controller_G_inv[i])
-			theta_stack = np.vstack((theta_stack, polytube_controller_theta[i]))
+	# load pwa cells
+	pwa_cells = polytube_controller['pwa_cells']
+	nx = 8
+	nu = 8 
+	Q = np.eye(nx)
+	R = np.eye(nu)
+	P = 100*np.eye(nx)
+	P[-1,-1]*=0.001
 
+	# print('sanity check')
+	# sanity_check = 1
+	# if sanity_check:
+	# 	for i in range(T):
+	# 		print('i=%d'%i)
+	# 		print(polytube_controller_x[i].reshape((1,-1)))
+	# 	# stack linearization matrices to simplify computation.
+	# 	l = len(polytube_controller_u)
+	# 	n = len(polytube_controller_x[0])
+	# 	x_stack = polytube_controller_x[0]
+	# 	u_stack = polytube_controller_u[0]
+	# 	G_stack = polytube_controller_G[0]
+	# 	G_inv_stack = polytube_controller_G_inv[0]
+	# 	theta_stack = polytube_controller_theta[0]
+	# 	for i in range(1,l):
+	# 		x_stack = np.vstack((x_stack, polytube_controller_x[i]))
+	# 		u_stack = np.vstack((u_stack, polytube_controller_u[i]))
+	# 		G_stack = scipy.linalg.block_diag(G_stack, polytube_controller_G[i])
+	# 		G_inv_stack = scipy.linalg.block_diag(G_inv_stack, polytube_controller_G_inv[i])
+	# 		theta_stack = np.vstack((theta_stack, polytube_controller_theta[i]))
+
+	# run feedback control
 	__ = 100 # total time steps
+	# choose an initial state
 	init_state = pos_over_time[0,:]
 	init_state[2] = 10.0*np.pi/180.0
 	init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
 	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
+	init_state[7] += 0.004
 	cur_x = init_state
 	cur_phi = cur_x[-2]
-	for t in range(__):
-		idx_min = -1
-		w_min = None
-
-		idx_min, state_type = closest_state(cur_x)
-		print('idx_min=%d,state type=%d'%(idx_min,state_type))
-		for idx in range(0,T):
-			#print('idx=%d'%idx)
-			cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
-			cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx])
-			if w_min == None or cur_w < w_min:
-				idx_min = idx
-				u_lin_min = cur_u_lin
-				w_min = cur_w
-		assert(idx_min > -1)
+	cur_idx = None
+	for t in range(__):	
+		is_right_contact_mode = check_contact_mode(cur_x)		
+		if is_right_contact_mode:
+			idx_min = -1 
+			w_min = None 
+			state_type = 0 
+			for idx in range(0,T):
+				#print('idx=%d'%idx)
+				cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
+				cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx])
+				if w_min == None or cur_w < w_min:
+					idx_min = idx
+					u_lin_min = cur_u_lin
+					w_min = cur_w
+			#assert(idx_min > -1)
+		else:
+			state_type = 1
+			idx_min = closest_tree_state(cur_x)
 		EPS = 1e-6
-		if state_type != 10: # trajectory states
+
+		# execute control based on different contact modes
+		if state_type == 0: # trajectory states
 			if idx_min >= T - 1:
 				print('success')
 			print('t=%d'%t)
 			print('idx=%d'%idx_min)
 			if w_min < EPS: # inside nearest polytope, use polytopic control law
+				print('inside polytope')
 				cur_u_lin = polytube_controller_u[idx_min]
 				cur_idx = idx_min
 			else:
@@ -850,14 +913,6 @@ def run():
 			next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
 			# A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 			# next_x_lin2 = (A.dot(cur_x) + B.dot(cur_u_lin) + c[:,0])
-			visualize(cur_x,cur_u_lin,t)
-			cur_x = next_x_lin
-			cur_phi = cur_x[-2]
-			cur_x[2] = min(cur_x[2],cur_phi)
-			cur_x[0] = DistanceCentroidToCoM*np.sin(cur_x[2])-r*cur_x[2]
-			cur_x[1] = r - DistanceCentroidToCoM*np.cos(cur_x[2])
-			if cur_idx >= T-1:
-				break
 
 			# # manually insert disturbance
 			# if t == 30:
@@ -867,7 +922,34 @@ def run():
 			# 	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
 			# 	cur_x = init_state
 			visualize(cur_x,cur_u_lin,t)
-    	
+		else:
+			cur_tree_state = tree_states[idx_min]
+			cur_modeseq = cur_tree_state.modeseq 
+			print(cur_modeseq)
+			cur_tf = cur_tree_state.tf 
+
+			print(cur_tf)
+			cur_linear_cell = pwa_cells[cur_tf][1]
+			x_ref = pos_over_time[cur_tf,:]
+			
+			cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,x_ref,polytube_controller_G[cur_tf])
+			# sys = []
+			# cur_pwa_cell = pwa_cells[cur_tf]
+			# for i in range(1,int(len(cur_modeseq))):
+			# 	sys.append(cur_pwa_cell[cur_modeseq[i]])
+			# cur_u_lin = mpc_qp(sys, cur_x, P, Q, R, x_ref)
+			# print(cur_u_lin.shape)
+			next_x_lin = (cur_linear_cell.A.dot(cur_x) + cur_linear_cell.B.dot(cur_u_lin) + cur_linear_cell.c[:,0])
+
+		visualize(cur_x,cur_u_lin,t)
+		cur_x = next_x_lin
+		cur_phi = cur_x[-2]
+		cur_x[2] = min(cur_x[2],cur_phi)
+		cur_x[0] = DistanceCentroidToCoM*np.sin(cur_x[2])-r*cur_x[2]
+		cur_x[1] = r - DistanceCentroidToCoM*np.cos(cur_x[2])
+		cur_x[7] = max(cur_x[7],d*np.sin(cur_phi-cur_x[2])+r)# right finger does not penetrate
+		if cur_idx != None and cur_idx >= T-1:
+			break
 
 def visualize(X,F,t):
     fig,ax1 = plt.subplots()

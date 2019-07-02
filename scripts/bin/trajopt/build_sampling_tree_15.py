@@ -104,11 +104,11 @@ def build_mip_ch(S, T, Q, R, P, x_goal, norm):
 
 	return model 
 
-def get_sample_state():
+def get_sample_state(_idx):
 	file_name = "trajopt_example15_latest"
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
-	t0 = 20 
+	t0 = 20*(_idx+1)
 	x_s = pos_over_time[t0,:]
 	x_s[-1] += 0.02
 	return x_s 
@@ -296,10 +296,10 @@ if __name__ == '__main__':
 	# pick the pwa system at time t
 	# sample and compute the closest state
 	tree_states = [] 
-	nsample = 1
+	nsample = 4
 	for i in range(nsample):
 		# generate a new sample
-		x_s = get_sample_state() # 1-dim vector
+		x_s = get_sample_state(i) # 1-dim vector
 		# find the closest state on the trajectory
 		t0 = closest_state_on_traj(x_s)
 
@@ -323,8 +323,7 @@ if __name__ == '__main__':
 		min_cost = None
 		min_cost_idx = None
 		# try closest goal states
-		for tj in range(-30,30):
-			tf = np.maximum(np.minimum(t0+tj, T),0)
+		for tf in range(100):
 			x_goal = pos_over_time[tf,:]
 
 			model = build_mip_ch(S, TT, Q, R, P, x_goal, 'two')
