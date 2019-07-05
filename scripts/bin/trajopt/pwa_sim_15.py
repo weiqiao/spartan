@@ -233,59 +233,6 @@ def get_back_controller2(cur_linear_cell,x,cur_phi,x_ref,G,G_inv):
 	#assert(1 == 0)
 	return res.x[:m], res.x[m:m+n], res.x[2*n+m]
 
-def mpc_qp(sys, x0, P, Q, R, x_ref, X_N=None):
-	"""
-	sys is a list of tuples (A,B,c)
-	"""
-	T = len(sys)
-	nx, nu = sys[0].B.shape
-	nvars = (nx + nu) * T
-	# vars = [x1,x2,...,xt|u0,u1,...,u(t-1)]
-	A_eq = np.hstack((np.eye(nx), np.zeros((nx,nx*(T-1))), -sys[0].B, np.zeros((nx,nu*(T-1)))))
-	b_eq = sys[0].A.dot(x0) + sys[0].c # 1-dim vector
-	for t in range(1,T):
-		A_eq1 = np.zeros((nx, (nx+nu)*T))
-		A_eq1[:, nx*(t-1) : nx*t] = -sys[t].A 
-		A_eq1[:, nx*t : nx*(t+1)] = np.eye(nx)
-		A_eq1[:, nx*T+nu*t : nx*T+nu*(t+1)] = -sys[t].B
-		b_eq1 = sys[t].c
-		A_eq = np.vstack((A_eq,A_eq1))
-		b_eq = np.hstack((b_eq,b_eq1))
-	if X_N != None:
-		A_ineq = np.zeros((X_N.A.shape[0], (nx+nu)*T))
-		A_ineq[:, nx*(T-1):nx*T] = X_N.A
-		bu_ineq = X_N.b
-		bl_ineq = -np.inf*np.ones(len(bu_ineq))
-	else:
-		A_ineq = []
-		bu_ineq = []
-		bl_ineq = []
-	# 
-	P_mat = np.zeros((nvars,nvars))
-	for t in range(T-1):
-		P_mat[nx*t : nx*(t+1), nx*t : nx*(t+1)] = Q 
-	P_mat[nx*(T-1) : nx*T, nx*(T-1) : nx*T] = P 
-	for t in range(T):
-		P_mat[nx*T+nu*t : nx*T+nu*(t+1), nx*T+nu*t : nx*T+nu*(t+1)] = R
-	q_mat = np.zeros(nvars)
-	for t in range(T-1):
-		q_mat[nx*t : nx*(t+1)] = -2.0*Q.dot(x_ref)
-	q_mat[nx*(T-1) : nx*T] = -2.0*P.dot(x_ref)
-	
-	P_mat = sparse.csc_matrix(P_mat)
-	if A_ineq != []:
-		A = sparse.csc_matrix(np.vstack((A_eq,A_ineq)))
-	else:
-		A = sparse.csc_matrix(A_eq)
-	prob = osqp.OSQP()
-	if A_ineq != []:
-		prob.setup(P_mat, q_mat, A, np.hstack((b_eq,bl_ineq)), np.hstack((b_eq,bu_ineq)), alpha = 1.0)
-	else:
-		prob.setup(P_mat, q_mat, A, b_eq, b_eq, alpha = 1.0)
-	res = prob.solve()
-	print(res.info.status)
-	return res.x[nx*T:nx*T+nu]
-
 def get_back_controller3(cur_linear_cell,x,x_ref,G,params=None):
 	# solve LP using osqp
 	# cur_linear_cell: current linear cell
@@ -732,6 +679,20 @@ def check_contact_mode(_x):
 		return False
 	return True
 
+def closest_traj_state(_x,pos_over_time):
+	weight = np.array([1.,1.,20.,.01,.01,.01,20.,5.])
+
+	N = pos_over_time.shape[0]
+	min_cost = None
+	min_idx = None
+	for n in range(N):
+		xt = pos_over_time[n,:]
+		cur_cost = weightedL2Square(_x,xt,weight)
+		if min_cost == None or cur_cost < min_cost:
+			min_cost = cur_cost 
+			min_idx = n 
+	return min_idx 
+
 def closest_tree_state(_x):
 	weight = np.array([1.,1.,20.,.01,.01,.01,20.,5.])
 
@@ -871,17 +832,18 @@ def run():
 	for t in range(__):	
 		is_right_contact_mode = check_contact_mode(cur_x)		
 		if is_right_contact_mode:
-			idx_min = -1 
-			w_min = None 
-			state_type = 0 
-			for idx in range(0,T):
-				#print('idx=%d'%idx)
-				cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
-				cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx])
-				if w_min == None or cur_w < w_min:
-					idx_min = idx
-					u_lin_min = cur_u_lin
-					w_min = cur_w
+			idx_min = closest_traj_state(cur_x, pos_over_time)
+			# idx_min = -1 
+			# w_min = None 
+			# state_type = 0 
+			# for idx in range(0,T):
+			# 	#print('idx=%d'%idx)
+			# 	cur_linear_cell = polytube_controller_list_of_cells[idx] # linear_cell(A,B,c,polytope(H,h))
+			# 	cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,polytube_controller_x[idx],polytube_controller_G[idx])
+			# 	if w_min == None or cur_w < w_min:
+			# 		idx_min = idx
+			# 		u_lin_min = cur_u_lin
+			# 		w_min = cur_w
 			#assert(idx_min > -1)
 		else:
 			state_type = 1
@@ -914,24 +876,20 @@ def run():
 			# A,B,c,H,h = calin1.linearize(pos_over_time[t,:], F_over_time[t,:], params)
 			# next_x_lin2 = (A.dot(cur_x) + B.dot(cur_u_lin) + c[:,0])
 
-			# # manually insert disturbance
-			# if t == 30:
-			# 	init_state = pos_over_time[0,:]
-			# 	init_state[2] = 10.0*np.pi/180.0
-			# 	init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
-			# 	init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
-			# 	cur_x = init_state
+			# manually insert disturbance
+			if t == 30:
+				init_state = pos_over_time[0,:]
+				init_state[2] = 10.0*np.pi/180.0
+				init_state[0] = DistanceCentroidToCoM*np.sin(init_state[2])-r*init_state[2]
+				init_state[1] = r - DistanceCentroidToCoM*np.cos(init_state[2])
+				cur_x = init_state
 			visualize(cur_x,cur_u_lin,t)
 		else:
 			cur_tree_state = tree_states[idx_min]
-			cur_modeseq = cur_tree_state.modeseq 
-			print(cur_modeseq)
 			cur_tf = cur_tree_state.tf 
-
 			print(cur_tf)
 			cur_linear_cell = pwa_cells[cur_tf][1]
 			x_ref = pos_over_time[cur_tf,:]
-			
 			cur_u_lin, cur_delta, cur_w,res_info = get_back_controller3(cur_linear_cell,cur_x,x_ref,polytube_controller_G[cur_tf])
 			# sys = []
 			# cur_pwa_cell = pwa_cells[cur_tf]
