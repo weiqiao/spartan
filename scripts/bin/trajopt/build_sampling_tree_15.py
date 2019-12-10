@@ -109,6 +109,7 @@ def get_sample_state(_idx):
 	state_and_control = pickle.load(open(file_name + ".p","rb"))
 	pos_over_time = state_and_control["state"]
 	t0 = 20*(_idx+1)
+	print('t0=%d'%t0)
 	x_s = pos_over_time[t0,:]
 	x_s[-1] += 0.02
 	return x_s 
@@ -369,7 +370,7 @@ if __name__ == '__main__':
 
 		x_save = x_s 
 		for t in range(TT):
-			tree_states.append(TreeStates(x_save, mode_seq[t:], tf))
+			tree_states.append(TreeStates(x_save, t0, mode_seq[t:], tf))
 			# update state
 			x_save = np.zeros(nx)
 			for kk in range(nx):
@@ -380,4 +381,4 @@ if __name__ == '__main__':
 	SAVE_OUTPUT = 1
 	if SAVE_OUTPUT:
 		output = {"tree_states": tree_states}
-		pickle.dump( output, open(file_name+"_tree_states.p","wb"))
+		pickle.dump( output, open(file_name+"_tree_states2.p","wb"))
